@@ -1,0 +1,10 @@
+name = "llm-test"
+main = "src/index.js"
+workers_dev = true
+compatibility_date = "2025-05-14"
+
+[observability]
+enabled = true
+
+[ai]
+binding = "AI"
