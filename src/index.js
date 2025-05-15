@@ -389,6 +389,8 @@ function generateInstructionsHTML(baseUrl) {
   <footer>
     <p>Created by <a href="https://azzar.netlify.app/porto" target="_blank">Azzar</a></p>
   </footer>
+
+  <script src="${baseUrl}/widget.js"></script>
 </body>
 </html>`;
 }
