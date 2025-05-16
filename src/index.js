@@ -482,7 +482,7 @@ export default {
           }
         };
         return new Response(JSON.stringify(stats), {
-          headers: {
+          headers: { 
             'Content-Type': 'application/json',
             ...corsHeaders
           }
@@ -1228,10 +1228,26 @@ function generateWidgetHTML(url) {
         return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + p1 + '</a>';
       });
       
-      // Plain URLs that are not part of markdown links
-      text = text.replace(/(?:^|\\s)(https?:\\/\\/[^\\s<]+)/g, function(match, url) {
-        return ' <a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
-      });
+      // Find and convert plain URLs to links - handle common patterns
+      // First, split by spaces to isolate potential URLs
+      const words = text.split(' ');
+      for (let i = 0; i < words.length; i++) {
+        const word = words[i].trim();
+        
+        // Check if this looks like a URL (starting with http or https)
+        if (word.startsWith('http://') || word.startsWith('https://')) {
+          // Replace the word with a linked version
+          words[i] = '<a href="' + word + '" target="_blank" rel="noopener noreferrer">' + word + '</a>';
+        }
+        
+        // Handle URLs that might be broken by line breaks
+        if (word.startsWith('www.') && !word.startsWith('<a')) {
+          words[i] = '<a href="https://' + word + '" target="_blank" rel="noopener noreferrer">' + word + '</a>';
+        }
+      }
+      
+      // Join the words back together
+      text = words.join(' ');
       
       // Replace numbered lists (e.g., 1. Item -> <ol><li>Item</li></ol>)
       let hasNumberedList = false;
