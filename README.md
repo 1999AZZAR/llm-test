@@ -12,6 +12,7 @@ A customizable AI chat widget powered by Cloudflare Workers and Llama 3.1 that c
 - Powered by llama-3.1-70b-instruct model via Cloudflare AI
 - **Wikipedia integration** - automatically retrieves relevant information for knowledge-based queries
 - **Smart token management** - prevents responses from being cut off mid-sentence
+- **Advanced formatting** - fixes common formatting issues such as excessive blank lines and improves readability
 
 ## Embedding on Your Website
 
@@ -85,6 +86,25 @@ To prevent responses from being cut off mid-sentence:
 2. Dynamically adjusts the maximum output tokens based on the context size
 3. Sets a safe buffer to ensure the total stays within model limits
 4. Ensures the response has enough space for a complete, coherent answer
+
+#### Formatting Improvements
+
+The system includes formatting optimization in two places:
+
+1. **Server-side processing** - Before sending the AI response to the client:
+   - Removes excessive blank lines (more than 2 consecutive blank lines)
+   - Ensures proper spacing around punctuation
+   - Maintains proper list formatting
+   - Cleans up irregular spacing
+
+2. **Client-side rendering** - The chat interface's Markdown-to-HTML converter:
+   - Properly formats ordered and unordered lists
+   - Handles text styling (bold, italic)
+   - Renders links as clickable HTML
+   - Eliminates excessive line breaks in the displayed text
+   - Ensures Wikipedia citations are properly displayed
+
+These improvements create a much more readable and professional chat experience, even when dealing with complex, formatted text.
 
 ### API Endpoints
 

@@ -62,6 +62,28 @@ function approximateTokenCount(text) {
   return Math.ceil(text.length / 4);
 }
 
+// Function to clean up excessive blank lines in text
+function cleanupFormatting(text) {
+  if (!text) return text;
+  
+  // Replace sequences of more than 2 newlines with just 2 newlines
+  let cleanedText = text.replace(/\n{3,}/g, '\n\n');
+  
+  // Handle cases where there might be multiple line breaks with spaces between them
+  cleanedText = cleanedText.replace(/(\s*\n\s*){3,}/g, '\n\n');
+  
+  // Ensure lists are properly formatted (no extra spaces before list items)
+  cleanedText = cleanedText.replace(/\n\s+(\d+\.\s|\*\s|\-\s)/g, '\n$1');
+  
+  // Ensure paragraphs end with proper punctuation when possible
+  cleanedText = cleanedText.replace(/([a-zA-Z])(\s*\n\s*\n\s*[A-Z])/g, '$1.$2');
+  
+  // Fix spacing after punctuation
+  cleanedText = cleanedText.replace(/([.,!?:;])([a-zA-Z])/g, '$1 $2');
+  
+  return cleanedText;
+}
+
 // Function to send messages to the AI
 async function sendToAI(messages, env) {
   try {
@@ -152,6 +174,9 @@ async function sendToAI(messages, env) {
       responseText = "Received an unexpected response type.";
       console.error('Unexpected response type:', typeof aiResponse);
     }
+    
+    // Clean up the response text formatting
+    responseText = cleanupFormatting(responseText);
     
     console.log('Final extracted response text:', responseText);
     
@@ -974,27 +999,59 @@ function generateWidgetHTML(url) {
     function markdownToHtml(text) {
       if (!text) return '';
       
-      // Replace numbered lists (1. Item -> <ol><li>Item</li></ol>)
-      let listItems = [];
-      const listPattern = /^\\d+\\.\\s(.+)$/gm;
-      let hasNumberedList = listPattern.test(text);
+      // First, fix formatting issues - replace excessive blank lines
+      text = text.replace(/\n{3,}/g, '\n\n');
       
-      if (hasNumberedList) {
-        // Reset regexp lastIndex
-        listPattern.lastIndex = 0;
+      // Handle cases where there might be multiple line breaks with spaces between them
+      text = text.replace(/(\\s*\n\\s*){3,}/g, '\n\n');
+      
+      // Replace numbered lists (e.g., 1. Item -> <ol><li>Item</li></ol>)
+      let hasNumberedList = false;
+      let listMatch = text.match(/^(\\d+)\\.\\s(.+)$/gm);
+      
+      if (listMatch) {
+        hasNumberedList = true;
         
-        // Collect all list items
+        // Create a temporary version without the list to process later
+        let tempText = text;
+        
+        // Extract all list items
+        let listItems = [];
+        let listRegex = /^(\\d+)\\.\\s(.+)$/gm;
         let match;
-        while ((match = listPattern.exec(text)) !== null) {
-          listItems.push(\`<li>\${match[1]}</li>\`);
-        }
         
-        // Remove list items from original text
-        text = text.replace(listPattern, '');
+        while ((match = listRegex.exec(text)) !== null) {
+          listItems.push(\`<li>\${match[2]}</li>\`);
+          // Remove this item from the temp text
+          tempText = tempText.replace(match[0], '');
+        }
         
         // Add the ordered list with items
         if (listItems.length > 0) {
-          text = \`<ol>\${listItems.join('')}</ol>\${text}\`;
+          let listHtml = \`<ol>\${listItems.join('')}</ol>\`;
+          // Find where to place the list in the original text
+          let firstListItemIndex = text.indexOf(listMatch[0]);
+          text = text.substring(0, firstListItemIndex) + listHtml + tempText;
+        }
+      }
+      
+      // Handle unordered lists (* or - items)
+      let unorderedMatch = text.match(/^[*-]\\s(.+)$/gm);
+      if (unorderedMatch) {
+        let tempText = text;
+        let listItems = [];
+        let listRegex = /^[*-]\\s(.+)$/gm;
+        let match;
+        
+        while ((match = listRegex.exec(text)) !== null) {
+          listItems.push(\`<li>\${match[1]}</li>\`);
+          tempText = tempText.replace(match[0], '');
+        }
+        
+        if (listItems.length > 0) {
+          let listHtml = \`<ul>\${listItems.join('')}</ul>\`;
+          let firstListItemIndex = text.indexOf(unorderedMatch[0]);
+          text = text.substring(0, firstListItemIndex) + listHtml + tempText;
         }
       }
       
@@ -1007,8 +1064,14 @@ function generateWidgetHTML(url) {
       // Replace code blocks
       text = text.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
       
+      // Handle links [text](url)
+      text = text.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2" target="_blank">$1</a>');
+      
       // Replace new lines with <br>
       text = text.replace(/\\n/g, '<br>');
+      
+      // Fix any excessive <br> tags
+      text = text.replace(/(<br>\\s*){3,}/g, '<br><br>');
       
       return text;
     }
