@@ -771,11 +771,16 @@ function generateWidgetJS(origin) {
                          rootStyles.getPropertyValue('--bg-color') ||
                          '#f5f5f5'; // Default fallback
     
+    // Add support for nonary color for AI message background
+    let nonaryColor = rootStyles.getPropertyValue('--nonary-color') || 
+                     '#e0e0e0'; // Default fallback is light gray
+    
     // Clean up the detected colors (remove whitespace, etc.)
     primaryColor = primaryColor.trim();
     primaryDarkColor = primaryDarkColor.trim();
     textOnPrimaryColor = textOnPrimaryColor.trim();
     backgroundColor = backgroundColor.trim();
+    nonaryColor = nonaryColor.trim();
     
     // If colors don't start with '#' or 'rgb', add '#'
     if (primaryColor && !primaryColor.startsWith('#') && !primaryColor.startsWith('rgb')) {
@@ -786,11 +791,16 @@ function generateWidgetJS(origin) {
       primaryDarkColor = '#' + primaryDarkColor;
     }
     
+    if (nonaryColor && !nonaryColor.startsWith('#') && !nonaryColor.startsWith('rgb')) {
+      nonaryColor = '#' + nonaryColor;
+    }
+    
     return {
       primaryColor,
       primaryDarkColor,
       textOnPrimaryColor,
-      backgroundColor
+      backgroundColor,
+      nonaryColor
     };
   };
   
@@ -886,7 +896,8 @@ function generateWidgetJS(origin) {
       primaryColor: encodeURIComponent(colors.primaryColor),
       primaryDarkColor: encodeURIComponent(colors.primaryDarkColor),
       textOnPrimaryColor: encodeURIComponent(colors.textOnPrimaryColor),
-      backgroundColor: encodeURIComponent(colors.backgroundColor)
+      backgroundColor: encodeURIComponent(colors.backgroundColor),
+      nonaryColor: encodeURIComponent(colors.nonaryColor)
     }).toString();
     
     iframe.src = '${origin}/widget-iframe?' + colorParams;
@@ -914,7 +925,8 @@ function generateWidgetJS(origin) {
         primaryColor: encodeURIComponent(newColors.primaryColor),
         primaryDarkColor: encodeURIComponent(newColors.primaryDarkColor),
         textOnPrimaryColor: encodeURIComponent(newColors.textOnPrimaryColor),
-        backgroundColor: encodeURIComponent(newColors.backgroundColor)
+        backgroundColor: encodeURIComponent(newColors.backgroundColor),
+        nonaryColor: encodeURIComponent(newColors.nonaryColor)
       }).toString();
       
       // Only reload if colors actually changed to prevent unnecessary refreshes
@@ -965,6 +977,7 @@ function generateWidgetHTML(url) {
   const primaryDarkColor = decodeURIComponent(url.searchParams.get('primaryDarkColor') || '#3700b3');
   const textOnPrimaryColor = decodeURIComponent(url.searchParams.get('textOnPrimaryColor') || 'white');
   const backgroundColor = decodeURIComponent(url.searchParams.get('backgroundColor') || '#f5f5f5');
+  const nonaryColor = decodeURIComponent(url.searchParams.get('nonaryColor') || '#e0e0e0');
 
   return `
 <!DOCTYPE html>
@@ -979,6 +992,7 @@ function generateWidgetHTML(url) {
       --primary-dark: ${primaryDarkColor};
       --on-primary: ${textOnPrimaryColor};
       --background: ${backgroundColor};
+      --nonary-color: ${nonaryColor};
     }
     
     * {
@@ -1029,7 +1043,7 @@ function generateWidgetHTML(url) {
     }
     
     .ai-message {
-      background-color: #e0e0e0;
+      background-color: var(--nonary-color, #e0e0e0);
       color: #333;
       align-self: flex-start;
       border-bottom-left-radius: 4px;
