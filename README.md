@@ -10,6 +10,8 @@ A customizable AI chat widget powered by Cloudflare Workers and Llama 3.1 that c
 - Embeddable on any website
 - **Automatic color scheme detection** - adapts to your website's theme
 - Powered by llama-3.1-70b-instruct model via Cloudflare AI
+- **Wikipedia integration** - automatically retrieves relevant information for knowledge-based queries
+- **Smart token management** - prevents responses from being cut off mid-sentence
 
 ## Embedding on Your Website
 
@@ -58,6 +60,31 @@ The project is built as a Cloudflare Worker with the following components:
 - `fetchTextFile(fileName, baseUrl, env, defaultContent)`: Attempts to load text files from multiple sources with fallbacks (direct fetch, R2/ASSETS binding, KV storage)
 - `getSystemPrompt(requestUrl, env)`: Retrieves the AI system instructions from systemInstruction.txt
 - `getCrawlLinks(requestUrl, env)`: Loads additional context links from crawl.txt
+
+### Smart Features
+
+The AI assistant has been enhanced with several smart capabilities:
+
+#### Wikipedia Integration
+
+When users ask knowledge-based questions, the system automatically:
+
+1. Detects if the query might benefit from Wikipedia information
+2. Queries the Wikipedia API to find relevant articles
+3. Extracts a summary from the most relevant article
+4. Adds this information to the conversation context
+5. Includes a citation with a link to the source article
+
+This gives the AI access to current, factual information to provide more accurate responses.
+
+#### Token Management
+
+To prevent responses from being cut off mid-sentence:
+
+1. The system estimates the token count of the conversation context
+2. Dynamically adjusts the maximum output tokens based on the context size
+3. Sets a safe buffer to ensure the total stays within model limits
+4. Ensures the response has enough space for a complete, coherent answer
 
 ### API Endpoints
 

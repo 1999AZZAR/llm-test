@@ -1,5 +1,67 @@
 // Environment setup & configuration
 
+// Function to query Wikipedia
+async function queryWikipedia(query) {
+  try {
+    console.log(`Querying Wikipedia for: ${query}`);
+    
+    // Encode the query for URL
+    const encodedQuery = encodeURIComponent(query);
+    
+    // First, search for relevant Wikipedia articles
+    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodedQuery}&format=json&origin=*`;
+    const searchResponse = await fetch(searchUrl);
+    const searchData = await searchResponse.json();
+    
+    // If no results, return empty
+    if (!searchData.query || !searchData.query.search || searchData.query.search.length === 0) {
+      return { success: false, message: "No Wikipedia articles found for this query." };
+    }
+    
+    // Get the first result's page ID
+    const pageId = searchData.query.search[0].pageid;
+    
+    // Fetch the content of the article
+    const contentUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1&pageids=${pageId}&format=json&origin=*`;
+    const contentResponse = await fetch(contentUrl);
+    const contentData = await contentResponse.json();
+    
+    // Extract the article content
+    const page = contentData.query.pages[pageId];
+    const title = page.title;
+    const extract = page.extract;
+    
+    // Return a summarized version of the content
+    return {
+      success: true,
+      title: title,
+      content: extract,
+      url: `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`
+    };
+  } catch (error) {
+    console.error('Error querying Wikipedia:', error);
+    return { success: false, message: "Failed to query Wikipedia: " + error.message };
+  }
+}
+
+// Function to determine if a query might benefit from Wikipedia
+function shouldUseWikipedia(message) {
+  // Check for explicit requests for information
+  const informationPatterns = [
+    /what is/i, /who is/i, /tell me about/i, /information on/i,
+    /when was/i, /where is/i, /how does/i, /definition of/i,
+    /explain/i, /describe/i, /history of/i, /facts about/i
+  ];
+  
+  return informationPatterns.some(pattern => pattern.test(message));
+}
+
+// Function to count tokens approximately
+function approximateTokenCount(text) {
+  // Simple approximation: 1 token ≈ 4 characters for English text
+  return Math.ceil(text.length / 4);
+}
+
 // Function to send messages to the AI
 async function sendToAI(messages, env) {
   try {
@@ -10,8 +72,49 @@ async function sendToAI(messages, env) {
       return "Sorry, the AI service is not properly configured.";
     }
     
+    // Check if the last user message might benefit from Wikipedia info
+    const lastUserMessage = messages.find(m => m.role === 'user');
+    let wikipediaInfo = null;
+    
+    if (lastUserMessage && shouldUseWikipedia(lastUserMessage.content)) {
+      wikipediaInfo = await queryWikipedia(lastUserMessage.content);
+      console.log('Wikipedia query results:', JSON.stringify(wikipediaInfo, null, 2));
+      
+      // If Wikipedia returned useful information, add it to the system message
+      if (wikipediaInfo && wikipediaInfo.success) {
+        // Find the system message
+        const systemMessageIndex = messages.findIndex(m => m.role === 'system');
+        
+        if (systemMessageIndex !== -1) {
+          // Add Wikipedia info to the system message
+          messages[systemMessageIndex].content += `\n\nRelevant information from Wikipedia about "${wikipediaInfo.title}":\n${wikipediaInfo.content}\nSource: ${wikipediaInfo.url}`;
+        } else {
+          // If no system message exists, add one with the Wikipedia info
+          messages.unshift({
+            role: 'system',
+            content: `Relevant information from Wikipedia about "${wikipediaInfo.title}":\n${wikipediaInfo.content}\nSource: ${wikipediaInfo.url}`
+          });
+        }
+      }
+    }
+    
+    // Calculate approximate token usage for input
+    let inputTokens = 0;
+    messages.forEach(msg => {
+      inputTokens += approximateTokenCount(msg.content);
+    });
+    
+    // Set maximum output tokens - leaving space based on input tokens
+    // Model context limit is about 8k-16k tokens depending on the specific model
+    // Let's target staying within 8k total tokens for safety
+    const MAX_CONTEXT_TOKENS = 8000;
+    const MAX_OUTPUT_TOKENS = Math.max(500, MAX_CONTEXT_TOKENS - inputTokens - 100); // 100 token buffer
+    
+    console.log(`Approximate input tokens: ${inputTokens}, setting max output tokens: ${MAX_OUTPUT_TOKENS}`);
+    
     const aiResponse = await env.AI.run('@cf/meta/llama-3.1-70b-instruct', {
-      messages: messages
+      messages: messages,
+      max_tokens: MAX_OUTPUT_TOKENS
     });
     
     console.log('Raw AI response:', JSON.stringify(aiResponse, null, 2));
@@ -51,6 +154,15 @@ async function sendToAI(messages, env) {
     }
     
     console.log('Final extracted response text:', responseText);
+    
+    // If we used Wikipedia, add a citation
+    if (wikipediaInfo && wikipediaInfo.success) {
+      // Check if the response doesn't already contain the citation
+      if (!responseText.includes(wikipediaInfo.url)) {
+        responseText += `\n\nSource: [Wikipedia - ${wikipediaInfo.title}](${wikipediaInfo.url})`;
+      }
+    }
+    
     return responseText;
   } catch (error) {
     console.error('Error in sendToAI:', error);
