@@ -13,6 +13,7 @@ A customizable AI chat widget powered by Cloudflare Workers and Llama 3.1 that c
 - **Wikipedia integration** - automatically retrieves relevant information for knowledge-based queries
 - **Smart token management** - prevents responses from being cut off mid-sentence
 - **Advanced formatting** - fixes common formatting issues such as excessive blank lines and improves readability
+- **LRU caching system** - improves performance and reduces resource usage with multi-level caching
 
 ## Embedding on Your Website
 
@@ -78,6 +79,37 @@ When users ask knowledge-based questions, the system automatically:
 
 This gives the AI access to current, factual information to provide more accurate responses.
 
+#### LRU Caching System
+
+The application uses a multi-level Least Recently Used (LRU) caching system:
+
+1. **In-memory Cache**:
+   - Fast, memory-based cache that stores up to 50 recent responses
+   - Uses a timestamp-based LRU eviction strategy
+   - Provides instant responses for repeat questions without API calls
+   - Automatically caches both AI responses and Wikipedia queries
+
+2. **KV Storage Cache** (when available):
+   - Persistent cache that survives application restarts
+   - Uses Cloudflare KV storage for long-term caching
+   - Stores responses with a configurable TTL (default: 1 day)
+   - Falls back to memory cache when KV is not available
+
+3. **Smart Key Generation**:
+   - Generates cache keys based on the last 3 messages in a conversation
+   - Considers both message content and role (user/assistant/system)
+   - Provides context-aware caching to ensure relevant responses
+
+4. **Cache Debugging**:
+   - Provides a `/api/cache-stats` endpoint for monitoring cache performance
+   - Logs cache hits and misses for performance analysis
+
+Benefits of the caching system:
+- Reduced Cloudflare AI API calls (lower costs)
+- Faster response times for repeat or similar questions
+- Decreased resource usage and improved scalability
+- More consistent responses to similar questions
+
 #### Token Management
 
 To prevent responses from being cut off mid-sentence:
@@ -132,6 +164,12 @@ export default {
     // Handle chat API requests
     if (url.pathname === '/api/chat' && request.method === 'POST') {
       // Process chat message and return AI response
+      // ...
+    }
+    
+    // Get cache statistics
+    if (url.pathname === '/api/cache-stats' && request.method === 'GET') {
+      // Return cache statistics for monitoring
       // ...
     }
     
@@ -233,7 +271,15 @@ name = "AI"
 binding = "@cf/meta/llama-3.1-70b-instruct"
 ```
 
-2. Optional: Configure storage for systemInstruction.txt and crawl.txt files:
+2. Optional: Configure KV storage for enhanced caching:
+
+```toml
+[[kv_namespaces]]
+binding = "KV"
+id = "your-kv-namespace-id"
+```
+
+3. Optional: Configure storage for systemInstruction.txt and crawl.txt files:
    - Use R2/ASSETS binding
    - Use KV storage
    - Or host the files directly alongside the worker
@@ -276,6 +322,7 @@ The project includes several endpoints:
 - `/widget.js` - Serves the embeddable widget JavaScript
 - `/widget-iframe` - Serves the chat interface HTML as an iframe
 - `/api/chat` - API endpoint for chat messages
+- `/api/cache-stats` - Returns information about the cache status
 
 ## Deployment
 
@@ -283,4 +330,5 @@ This project uses Cloudflare Workers for deployment.
 
 1. Install Wrangler CLI: `npm install -g wrangler`
 2. Configure your `wrangler.toml` with the appropriate AI binding
-3. Deploy to Cloudflare: `wrangler deploy` 
+3. Optional: Configure KV namespace for enhanced caching
+4. Deploy to Cloudflare: `wrangler deploy` 

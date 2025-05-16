@@ -1,7 +1,98 @@
 // Environment setup & configuration
 
+// Simple LRU Cache implementation
+class LRUCache {
+  constructor(maxSize = 50) {
+    this.maxSize = maxSize;
+    this.cache = new Map();
+    this.keyTimestamps = new Map();
+  }
+
+  // Generate a cache key from messages
+  static generateKey(messages) {
+    // Create a stable key by combining the content of the last 3 messages
+    // or fewer if there aren't 3 messages
+    const messagesToConsider = messages.slice(Math.max(0, messages.length - 3));
+    const keyParts = messagesToConsider.map(msg => `${msg.role}:${msg.content}`);
+    return keyParts.join('|');
+  }
+
+  // Check if a key exists and is valid
+  has(key) {
+    return this.cache.has(key);
+  }
+
+  // Get a value from cache
+  get(key) {
+    if (!this.has(key)) return null;
+    
+    // Update the timestamp when accessed
+    this.keyTimestamps.set(key, Date.now());
+    return this.cache.get(key);
+  }
+
+  // Set a value in cache
+  set(key, value) {
+    // If we're at capacity, remove the least recently used item
+    if (this.cache.size >= this.maxSize) {
+      this.evictLRU();
+    }
+    
+    // Add the new item
+    this.cache.set(key, value);
+    this.keyTimestamps.set(key, Date.now());
+  }
+
+  // Remove the least recently used item
+  evictLRU() {
+    if (this.cache.size === 0) return;
+    
+    let oldestKey = null;
+    let oldestTime = Infinity;
+    
+    // Find the oldest item by timestamp
+    for (const [key, timestamp] of this.keyTimestamps.entries()) {
+      if (timestamp < oldestTime) {
+        oldestTime = timestamp;
+        oldestKey = key;
+      }
+    }
+    
+    // Remove the oldest item
+    if (oldestKey) {
+      this.cache.delete(oldestKey);
+      this.keyTimestamps.delete(oldestKey);
+    }
+  }
+
+  // Clear the entire cache
+  clear() {
+    this.cache.clear();
+    this.keyTimestamps.clear();
+  }
+}
+
+// Create a global memory cache instance
+const memoryCache = new LRUCache(50); // Cache up to 50 responses
+
+// Optional: Initialize a KV-based cache if available
+let kvCache = {
+  async get(key) { return null; },
+  async set(key, value) { return; },
+  async has(key) { return false; }
+};
+
 // Function to query Wikipedia
 async function queryWikipedia(query) {
+  // Generate a cache key specifically for Wikipedia results
+  const cacheKey = `wiki:${query.trim().toLowerCase()}`;
+  
+  // Check memory cache first
+  if (memoryCache.has(cacheKey)) {
+    console.log(`Wikipedia cache hit for: ${query}`);
+    return memoryCache.get(cacheKey);
+  }
+  
   try {
     console.log(`Querying Wikipedia for: ${query}`);
     
@@ -15,7 +106,9 @@ async function queryWikipedia(query) {
     
     // If no results, return empty
     if (!searchData.query || !searchData.query.search || searchData.query.search.length === 0) {
-      return { success: false, message: "No Wikipedia articles found for this query." };
+      const result = { success: false, message: "No Wikipedia articles found for this query." };
+      memoryCache.set(cacheKey, result);
+      return result;
     }
     
     // Get the first result's page ID
@@ -31,13 +124,18 @@ async function queryWikipedia(query) {
     const title = page.title;
     const extract = page.extract;
     
-    // Return a summarized version of the content
-    return {
+    // Create the result
+    const result = {
       success: true,
       title: title,
       content: extract,
       url: `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`
     };
+    
+    // Cache the result
+    memoryCache.set(cacheKey, result);
+    
+    return result;
   } catch (error) {
     console.error('Error querying Wikipedia:', error);
     return { success: false, message: "Failed to query Wikipedia: " + error.message };
@@ -84,14 +182,81 @@ function cleanupFormatting(text) {
   return cleanedText;
 }
 
+// Function to initialize KV cache if available
+async function initializeKVCache(env) {
+  if (env && env.KV) {
+    console.log('Initializing KV cache');
+    
+    // Create a more robust KV wrapper with caching functionality
+    kvCache = {
+      async get(key) {
+        try {
+          const value = await env.KV.get(key);
+          if (value) {
+            return JSON.parse(value);
+          }
+          return null;
+        } catch (error) {
+          console.error('Error getting from KV cache:', error);
+          return null;
+        }
+      },
+      
+      async set(key, value, ttl = 86400) { // Default TTL: 1 day
+        try {
+          await env.KV.put(key, JSON.stringify(value), { expirationTtl: ttl });
+        } catch (error) {
+          console.error('Error setting KV cache:', error);
+        }
+      },
+      
+      async has(key) {
+        try {
+          const value = await env.KV.get(key);
+          return value != null;
+        } catch (error) {
+          console.error('Error checking KV cache:', error);
+          return false;
+        }
+      }
+    };
+    
+    return true;
+  }
+  
+  console.log('KV binding not available, using memory cache only');
+  return false;
+}
+
 // Function to send messages to the AI
 async function sendToAI(messages, env) {
   try {
-    console.log('Sending request to AI with messages:', JSON.stringify(messages, null, 2));
+    console.log('Processing request with messages:', JSON.stringify(messages, null, 2));
     
     if (!env.AI) {
       console.error('AI binding is not available. Check your wrangler.toml configuration.');
       return "Sorry, the AI service is not properly configured.";
+    }
+    
+    // Generate a cache key for this conversation
+    const cacheKey = LRUCache.generateKey(messages);
+    
+    // Check memory cache first (fastest)
+    if (memoryCache.has(cacheKey)) {
+      console.log('Memory cache hit!');
+      return memoryCache.get(cacheKey);
+    }
+    
+    // Then check KV cache if available (slower but persistent)
+    let kvCacheResult = null;
+    if (env.KV) {
+      kvCacheResult = await kvCache.get(cacheKey);
+      if (kvCacheResult) {
+        console.log('KV cache hit!');
+        // Update memory cache for faster access next time
+        memoryCache.set(cacheKey, kvCacheResult);
+        return kvCacheResult;
+      }
     }
     
     // Check if the last user message might benefit from Wikipedia info
@@ -134,6 +299,8 @@ async function sendToAI(messages, env) {
     
     console.log(`Approximate input tokens: ${inputTokens}, setting max output tokens: ${MAX_OUTPUT_TOKENS}`);
     
+    // Log cache miss and call the AI API
+    console.log('Cache miss - calling AI service');
     const aiResponse = await env.AI.run('@cf/meta/llama-3.1-70b-instruct', {
       messages: messages,
       max_tokens: MAX_OUTPUT_TOKENS
@@ -188,6 +355,14 @@ async function sendToAI(messages, env) {
       }
     }
     
+    // Store the response in the cache
+    memoryCache.set(cacheKey, responseText);
+    
+    // Also store in KV cache if available
+    if (env.KV) {
+      await kvCache.set(cacheKey, responseText);
+    }
+    
     return responseText;
   } catch (error) {
     console.error('Error in sendToAI:', error);
@@ -205,6 +380,11 @@ async function sendToAI(messages, env) {
 // Function to handle request
 export default {
   async fetch(request, env) {
+    // Initialize KV cache if available
+    if (env && env.KV) {
+      await initializeKVCache(env);
+    }
+
     const url = new URL(request.url);
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
@@ -287,6 +467,22 @@ export default {
         
         return new Response(JSON.stringify({ response: aiResponse }), {
           headers: { 
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        });
+      }
+      
+      // Handle cache stats request (for debugging)
+      if (url.pathname === '/api/cache-stats' && request.method === 'GET') {
+        const stats = {
+          memoryCache: {
+            size: memoryCache.cache.size,
+            maxSize: memoryCache.maxSize,
+          }
+        };
+        return new Response(JSON.stringify(stats), {
+          headers: {
             'Content-Type': 'application/json',
             ...corsHeaders
           }
@@ -956,6 +1152,17 @@ function generateWidgetHTML(url) {
         transform: translateY(-6px);
       }
     }
+    
+    .ai-message a {
+      color: var(--primary-color, #6200ee);
+      text-decoration: underline;
+      word-break: break-all;
+    }
+    
+    .ai-message a:hover {
+      text-decoration: none;
+      opacity: 0.8;
+    }
   </style>
 </head>
 <body>
@@ -1004,6 +1211,27 @@ function generateWidgetHTML(url) {
       
       // Handle cases where there might be multiple line breaks with spaces between them
       text = text.replace(/(\\s*\\n\\s*){3,}/g, '\\n\\n');
+      
+      // Special check for links before anything else
+      // Links with markdown format [text](url)
+      text = text.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, function(match, p1, p2) {
+        // Make sure the URL has http/https prefix
+        let url = p2;
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+          // If it's a Wikipedia link or other common domain, assume https
+          if (url.includes('wikipedia.org') || url.includes('github.com')) {
+            url = 'https://' + url;
+          } else {
+            url = 'https://' + url;
+          }
+        }
+        return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + p1 + '</a>';
+      });
+      
+      // Plain URLs that are not part of markdown links
+      text = text.replace(/(?:^|\\s)(https?:\\/\\/[^\\s<]+)/g, function(match, url) {
+        return ' <a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
+      });
       
       // Replace numbered lists (e.g., 1. Item -> <ol><li>Item</li></ol>)
       let hasNumberedList = false;
@@ -1063,9 +1291,6 @@ function generateWidgetHTML(url) {
       
       // Replace code blocks
       text = text.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
-      
-      // Handle links [text](url)
-      text = text.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2" target="_blank">$1</a>');
       
       // Replace new lines with <br>
       text = text.replace(/\\n/g, '<br>');
