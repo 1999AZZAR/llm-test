@@ -1000,14 +1000,14 @@ function generateWidgetHTML(url) {
       if (!text) return '';
       
       // First, fix formatting issues - replace excessive blank lines
-      text = text.replace(/\n{3,}/g, '\n\n');
+      text = text.replace(/\\n{3,}/g, '\\n\\n');
       
       // Handle cases where there might be multiple line breaks with spaces between them
-      text = text.replace(/(\\s*\n\\s*){3,}/g, '\n\n');
+      text = text.replace(/(\\s*\\n\\s*){3,}/g, '\\n\\n');
       
       // Replace numbered lists (e.g., 1. Item -> <ol><li>Item</li></ol>)
       let hasNumberedList = false;
-      let listMatch = text.match(/^(\\d+)\\.\\s(.+)$/gm);
+      let listMatch = text.match(/^(\\d+)\\.(\\s.+)$/gm);
       
       if (listMatch) {
         hasNumberedList = true;
@@ -1017,18 +1017,18 @@ function generateWidgetHTML(url) {
         
         // Extract all list items
         let listItems = [];
-        let listRegex = /^(\\d+)\\.\\s(.+)$/gm;
+        let listRegex = /^(\\d+)\\.(\\s.+)$/gm;
         let match;
         
         while ((match = listRegex.exec(text)) !== null) {
-          listItems.push(\`<li>\${match[2]}</li>\`);
+          listItems.push('<li>' + match[2].trim() + '</li>');
           // Remove this item from the temp text
           tempText = tempText.replace(match[0], '');
         }
         
         // Add the ordered list with items
         if (listItems.length > 0) {
-          let listHtml = \`<ol>\${listItems.join('')}</ol>\`;
+          let listHtml = '<ol>' + listItems.join('') + '</ol>';
           // Find where to place the list in the original text
           let firstListItemIndex = text.indexOf(listMatch[0]);
           text = text.substring(0, firstListItemIndex) + listHtml + tempText;
@@ -1036,20 +1036,20 @@ function generateWidgetHTML(url) {
       }
       
       // Handle unordered lists (* or - items)
-      let unorderedMatch = text.match(/^[*-]\\s(.+)$/gm);
+      let unorderedMatch = text.match(/^[*\\-](\\s.+)$/gm);
       if (unorderedMatch) {
         let tempText = text;
         let listItems = [];
-        let listRegex = /^[*-]\\s(.+)$/gm;
+        let listRegex = /^[*\\-](\\s.+)$/gm;
         let match;
         
         while ((match = listRegex.exec(text)) !== null) {
-          listItems.push(\`<li>\${match[1]}</li>\`);
+          listItems.push('<li>' + match[1].trim() + '</li>');
           tempText = tempText.replace(match[0], '');
         }
         
         if (listItems.length > 0) {
-          let listHtml = \`<ul>\${listItems.join('')}</ul>\`;
+          let listHtml = '<ul>' + listItems.join('') + '</ul>';
           let firstListItemIndex = text.indexOf(unorderedMatch[0]);
           text = text.substring(0, firstListItemIndex) + listHtml + tempText;
         }
@@ -1121,7 +1121,7 @@ function generateWidgetHTML(url) {
     // Add a message to the UI
     const addMessageToUI = (sender, message) => {
       const messageElement = document.createElement('div');
-      messageElement.className = \`message \${sender}-message\`;
+      messageElement.className = 'message ' + sender + '-message';
       
       // Convert markdown to HTML for AI messages only
       if (sender === 'ai') {
