@@ -164,15 +164,16 @@ function approximateTokenCount(text) {
 function cleanupFormatting(text) {
   if (!text) return text;
   
-  // Normalize URLs that might have spaces in them
-  // First, find all potential URL fragments
-  text = text.replace(/(https?:\/\/|www\.)[^\s\.,;:!\?\)"']+([\s\n]+[^\s\.,;:!\?\)"']+)+/g, function(match) {
-    // Remove all spaces/line breaks from the URL
-    return match.replace(/[\s\n]+/g, '');
+  // First, identify and temporarily protect URLs from formatting changes
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const urls = [];
+  let protectedText = text.replace(urlRegex, function(match) {
+    urls.push(match);
+    return `__URL_PLACEHOLDER_${urls.length - 1}__`;
   });
   
   // Replace sequences of more than 2 newlines with just 2 newlines
-  let cleanedText = text.replace(/\n{3,}/g, '\n\n');
+  let cleanedText = protectedText.replace(/\n{3,}/g, '\n\n');
   
   // Handle cases where there might be multiple line breaks with spaces between them
   cleanedText = cleanedText.replace(/(\s*\n\s*){3,}/g, '\n\n');
@@ -183,8 +184,13 @@ function cleanupFormatting(text) {
   // Ensure paragraphs end with proper punctuation when possible
   cleanedText = cleanedText.replace(/([a-zA-Z])(\s*\n\s*\n\s*[A-Z])/g, '$1.$2');
   
-  // Fix spacing after punctuation
+  // Fix spacing after punctuation, but not for placeholders
   cleanedText = cleanedText.replace(/([.,!?:;])([a-zA-Z])/g, '$1 $2');
+  
+  // Now restore the protected URLs
+  for (let i = 0; i < urls.length; i++) {
+    cleanedText = cleanedText.replace(`__URL_PLACEHOLDER_${i}__`, urls[i]);
+  }
   
   return cleanedText;
 }
@@ -358,7 +364,9 @@ async function sendToAI(messages, env) {
     if (wikipediaInfo && wikipediaInfo.success) {
       // Check if the response doesn't already contain the citation
       if (!responseText.includes(wikipediaInfo.url)) {
-        responseText += `\n\nSource: [Wikipedia - ${wikipediaInfo.title}](${wikipediaInfo.url})`;
+        // Make sure there are no spaces in the URL
+        const cleanUrl = wikipediaInfo.url.replace(/\s+/g, '');
+        responseText += `\n\nSource: [Wikipedia - ${wikipediaInfo.title}](${cleanUrl})`;
       }
     }
     
@@ -1219,17 +1227,11 @@ function generateWidgetHTML(url) {
       // Handle cases where there might be multiple line breaks with spaces between them
       text = text.replace(/(\\s*\\n\\s*){3,}/g, '\\n\\n');
       
-      // First, normalize URLs that might have spaces in them
-      text = text.replace(/(https?:\/\/|www\.)[^\\s\\.,;:!\\?\\)"']+(\\s+[^\\s\\.,;:!\\?\\)"']+)+/g, function(match) {
-        // Remove spaces from the URL
-        return match.replace(/\\s+/g, '');
-      });
-      
       // Special check for links before anything else
       // Links with markdown format [text](url)
       text = text.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, function(match, p1, p2) {
-        // Make sure the URL has http/https prefix
-        let url = p2;
+        // Remove any spaces that might be in the URL
+        let url = p2.replace(/\\s+/g, '');
         if (!url.startsWith('http://') && !url.startsWith('https://')) {
           // If it's a Wikipedia link or other common domain, assume https
           if (url.includes('wikipedia.org') || url.includes('github.com')) {
@@ -1241,15 +1243,11 @@ function generateWidgetHTML(url) {
         return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + p1 + '</a>';
       });
       
-      // Process URLs:
-      // 1. Find complete URLs starting with http:// or https://
-      text = text.replace(/(https?:\/\/[^\\s\\.,;:!\\?\\)"']+)/g, function(url) {
-        return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
-      });
-      
-      // 2. Find URLs starting with www.
-      text = text.replace(/(?:^|\\s)(www\\.[^\\s\\.,;:!\\?\\)"']+)/g, function(match, url) {
-        return match.replace(url, '<a href="https://' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>');
+      // Plain URLs that are not part of markdown links - fix spaces within URLs
+      text = text.replace(/(?:^|\\s)(https?:\\/\\/[^\\s<]+(?:\\.\\s*[^\\s<]+)*)/g, function(match, url) {
+        // Remove any spaces from the URL
+        const cleanUrl = url.replace(/\\s+/g, '');
+        return ' <a href="' + cleanUrl + '" target="_blank" rel="noopener noreferrer">' + cleanUrl + '</a>';
       });
       
       // Replace numbered lists (e.g., 1. Item -> <ol><li>Item</li></ol>)
