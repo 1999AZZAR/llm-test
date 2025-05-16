@@ -858,7 +858,7 @@ function generateWidgetJS(origin) {
         position: absolute;
         bottom: 80px;
         right: 0;
-        width: 350px;
+        width: 400px; /* Increased from 350px */
         height: 500px;
         background: \${colors.backgroundColor || 'white'};
         border-radius: 10px;
@@ -1029,9 +1029,11 @@ function generateWidgetHTML(url) {
       flex-direction: column;
       height: 100%;
       max-width: 100%;
+      width: 100%; /* Ensure it takes up available space */
       margin: 0 auto;
       overflow: hidden;
       background-color: var(--octonary-color, white);
+      padding: 0 5px; /* Add a bit of padding on the sides */
     }
     
     .messages {
@@ -1198,13 +1200,16 @@ function generateWidgetHTML(url) {
     }
     
     .ai-message a {
-      color: var(--primary-dark, #3700b3);
-      text-decoration: underline;
+      color: var(--primary-color, #6200ee);
+      text-decoration: none; /* Remove underline by default */
+      border-bottom: 1px solid rgba(98, 0, 238, 0.4); /* Subtle bottom border */
       word-break: break-all;
       font-weight: 500;
       transition: all 0.2s ease-in-out;
       padding: 0 2px;
       border-radius: 2px;
+      position: relative;
+      display: inline-block;
     }
     
     .ai-message a:hover {
