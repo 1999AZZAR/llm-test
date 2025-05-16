@@ -774,6 +774,10 @@ function generateWidgetJS(origin) {
     // Add support for nonary color for AI message background
     let nonaryColor = rootStyles.getPropertyValue('--nonary-color') || 
                      '#e0e0e0'; // Default fallback is light gray
+                     
+    // Add support for octonary color for chat container background
+    let octonaryColor = rootStyles.getPropertyValue('--octonary-color') ||
+                       'white'; // Default fallback is white
     
     // Clean up the detected colors (remove whitespace, etc.)
     primaryColor = primaryColor.trim();
@@ -781,6 +785,7 @@ function generateWidgetJS(origin) {
     textOnPrimaryColor = textOnPrimaryColor.trim();
     backgroundColor = backgroundColor.trim();
     nonaryColor = nonaryColor.trim();
+    octonaryColor = octonaryColor.trim();
     
     // If colors don't start with '#' or 'rgb', add '#'
     if (primaryColor && !primaryColor.startsWith('#') && !primaryColor.startsWith('rgb')) {
@@ -795,12 +800,17 @@ function generateWidgetJS(origin) {
       nonaryColor = '#' + nonaryColor;
     }
     
+    if (octonaryColor && !octonaryColor.startsWith('#') && !octonaryColor.startsWith('rgb')) {
+      octonaryColor = '#' + octonaryColor;
+    }
+    
     return {
       primaryColor,
       primaryDarkColor,
       textOnPrimaryColor,
       backgroundColor,
-      nonaryColor
+      nonaryColor,
+      octonaryColor
     };
   };
   
@@ -897,7 +907,8 @@ function generateWidgetJS(origin) {
       primaryDarkColor: encodeURIComponent(colors.primaryDarkColor),
       textOnPrimaryColor: encodeURIComponent(colors.textOnPrimaryColor),
       backgroundColor: encodeURIComponent(colors.backgroundColor),
-      nonaryColor: encodeURIComponent(colors.nonaryColor)
+      nonaryColor: encodeURIComponent(colors.nonaryColor),
+      octonaryColor: encodeURIComponent(colors.octonaryColor)
     }).toString();
     
     iframe.src = '${origin}/widget-iframe?' + colorParams;
@@ -926,7 +937,8 @@ function generateWidgetJS(origin) {
         primaryDarkColor: encodeURIComponent(newColors.primaryDarkColor),
         textOnPrimaryColor: encodeURIComponent(newColors.textOnPrimaryColor),
         backgroundColor: encodeURIComponent(newColors.backgroundColor),
-        nonaryColor: encodeURIComponent(newColors.nonaryColor)
+        nonaryColor: encodeURIComponent(newColors.nonaryColor),
+        octonaryColor: encodeURIComponent(newColors.octonaryColor)
       }).toString();
       
       // Only reload if colors actually changed to prevent unnecessary refreshes
@@ -978,6 +990,7 @@ function generateWidgetHTML(url) {
   const textOnPrimaryColor = decodeURIComponent(url.searchParams.get('textOnPrimaryColor') || 'white');
   const backgroundColor = decodeURIComponent(url.searchParams.get('backgroundColor') || '#f5f5f5');
   const nonaryColor = decodeURIComponent(url.searchParams.get('nonaryColor') || '#e0e0e0');
+  const octonaryColor = decodeURIComponent(url.searchParams.get('octonaryColor') || 'white');
 
   return `
 <!DOCTYPE html>
@@ -993,6 +1006,7 @@ function generateWidgetHTML(url) {
       --on-primary: ${textOnPrimaryColor};
       --background: ${backgroundColor};
       --nonary-color: ${nonaryColor};
+      --octonary-color: ${octonaryColor};
     }
     
     * {
@@ -1017,6 +1031,7 @@ function generateWidgetHTML(url) {
       max-width: 100%;
       margin: 0 auto;
       overflow: hidden;
+      background-color: var(--octonary-color, white);
     }
     
     .messages {
@@ -1044,7 +1059,7 @@ function generateWidgetHTML(url) {
     
     .ai-message {
       background-color: var(--nonary-color, #e0e0e0);
-      color: #333;
+      color: var(--primary-color, #333);
       align-self: flex-start;
       border-bottom-left-radius: 4px;
     }
@@ -1183,14 +1198,21 @@ function generateWidgetHTML(url) {
     }
     
     .ai-message a {
-      color: var(--primary-color, #6200ee);
+      color: var(--primary-dark, #3700b3);
       text-decoration: underline;
       word-break: break-all;
+      font-weight: 500;
+      transition: all 0.2s ease-in-out;
+      padding: 0 2px;
+      border-radius: 2px;
     }
     
     .ai-message a:hover {
       text-decoration: none;
-      opacity: 0.8;
+      background-color: #f0e6ff; /* Light purple background */
+      color: var(--primary-color, #6200ee);
+      box-shadow: 0 1px 0 var(--primary-color, #6200ee);
+      transform: translateY(-1px);
     }
   </style>
 </head>
