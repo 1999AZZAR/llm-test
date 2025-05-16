@@ -164,6 +164,13 @@ function approximateTokenCount(text) {
 function cleanupFormatting(text) {
   if (!text) return text;
   
+  // Normalize URLs that might have spaces in them
+  // First, find all potential URL fragments
+  text = text.replace(/(https?:\/\/|www\.)[^\s\.,;:!\?\)"']+([\s\n]+[^\s\.,;:!\?\)"']+)+/g, function(match) {
+    // Remove all spaces/line breaks from the URL
+    return match.replace(/[\s\n]+/g, '');
+  });
+  
   // Replace sequences of more than 2 newlines with just 2 newlines
   let cleanedText = text.replace(/\n{3,}/g, '\n\n');
   
@@ -1212,6 +1219,12 @@ function generateWidgetHTML(url) {
       // Handle cases where there might be multiple line breaks with spaces between them
       text = text.replace(/(\\s*\\n\\s*){3,}/g, '\\n\\n');
       
+      // First, normalize URLs that might have spaces in them
+      text = text.replace(/(https?:\/\/|www\.)[^\\s\\.,;:!\\?\\)"']+(\\s+[^\\s\\.,;:!\\?\\)"']+)+/g, function(match) {
+        // Remove spaces from the URL
+        return match.replace(/\\s+/g, '');
+      });
+      
       // Special check for links before anything else
       // Links with markdown format [text](url)
       text = text.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, function(match, p1, p2) {
@@ -1228,26 +1241,16 @@ function generateWidgetHTML(url) {
         return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + p1 + '</a>';
       });
       
-      // Find and convert plain URLs to links - handle common patterns
-      // First, split by spaces to isolate potential URLs
-      const words = text.split(' ');
-      for (let i = 0; i < words.length; i++) {
-        const word = words[i].trim();
-        
-        // Check if this looks like a URL (starting with http or https)
-        if (word.startsWith('http://') || word.startsWith('https://')) {
-          // Replace the word with a linked version
-          words[i] = '<a href="' + word + '" target="_blank" rel="noopener noreferrer">' + word + '</a>';
-        }
-        
-        // Handle URLs that might be broken by line breaks
-        if (word.startsWith('www.') && !word.startsWith('<a')) {
-          words[i] = '<a href="https://' + word + '" target="_blank" rel="noopener noreferrer">' + word + '</a>';
-        }
-      }
+      // Process URLs:
+      // 1. Find complete URLs starting with http:// or https://
+      text = text.replace(/(https?:\/\/[^\\s\\.,;:!\\?\\)"']+)/g, function(url) {
+        return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
+      });
       
-      // Join the words back together
-      text = words.join(' ');
+      // 2. Find URLs starting with www.
+      text = text.replace(/(?:^|\\s)(www\\.[^\\s\\.,;:!\\?\\)"']+)/g, function(match, url) {
+        return match.replace(url, '<a href="https://' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>');
+      });
       
       // Replace numbered lists (e.g., 1. Item -> <ol><li>Item</li></ol>)
       let hasNumberedList = false;
