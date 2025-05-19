@@ -1087,14 +1087,14 @@ function generateWidgetHTML(url) {
     .input-container {
       display: flex;
       padding: 12px;
-      border-top: 1px solid #e0e0e0;
-      background-color: white;
+      border-top: 1px solid var(--nonary-color, #e0e0e0);
+      background-color: var(--octonary-color, white);
     }
     
     .input-field {
       flex: 1;
       padding: 12px 16px;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--nonary-color, #e0e0e0);
       border-radius: 24px;
       font-size: 14px;
       outline: none;
@@ -1131,8 +1131,8 @@ function generateWidgetHTML(url) {
     
     .clear-button {
       background-color: transparent;
-      color: #757575;
-      border: 1px solid #e0e0e0;
+      color: var(--primary-color, #6200ee);
+      border: 1px solid var(--nonary-color, #e0e0e0);
       border-radius: 50%;
       width: 40px;
       height: 40px;
@@ -1141,11 +1141,11 @@ function generateWidgetHTML(url) {
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: background-color 0.2s;
+      transition: all 0.2s;
     }
     
     .clear-button:hover {
-      background-color: #f5f5f5;
+      background-color: var(--nonary-color, #e0e0e0);
     }
     
     .clear-icon {
@@ -1156,7 +1156,7 @@ function generateWidgetHTML(url) {
     .typing-indicator {
       display: none;
       padding: 12px 16px;
-      background-color: #e0e0e0;
+      background-color: var(--nonary-color, #e0e0e0);
       border-radius: 18px;
       margin-bottom: 16px;
       max-width: 80%;
@@ -1173,7 +1173,7 @@ function generateWidgetHTML(url) {
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background-color: #757575;
+      background-color: var(--primary-color, #6200ee);
       margin-right: 4px;
       animation: typing 1.4s infinite ease-in-out;
     }
