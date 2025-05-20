@@ -156,3 +156,90 @@ The widget will fetch a new welcome message and reset the conversation history i
 
 ## License
 MIT 
+
+## Demo Page: Live Language Switching
+
+The included demo page showcases robust, instant language switching for the chat widget:
+
+- **Language switcher UI:** Buttons above the widget let you switch between English and Bahasa Indonesia instantly.
+- **How it works:**
+  - The demo page (parent) sends a `postMessage` to the widget iframe when you click a language button.
+  - The widget iframe listens for this message and calls its internal `window.azzarChatSetLang` API.
+  - The welcome message is regenerated immediately in the selected language, and the chat resets.
+
+**Parent page code (demo):**
+```js
+function postLangToIframe(lang) {
+  var iframe = document.querySelector('.azzar-chat-iframe');
+  if (iframe && iframe.contentWindow) {
+    iframe.contentWindow.postMessage({ azzarSetLang: lang }, '*');
+  }
+}
+document.getElementById('lang-en').addEventListener('click', function() {
+  postLangToIframe('en');
+});
+document.getElementById('lang-id').addEventListener('click', function() {
+  postLangToIframe('id');
+});
+```
+
+**Widget iframe code:**
+```js
+window.addEventListener('message', function(event) {
+  if (event.data && event.data.azzarSetLang) {
+    if (typeof window.azzarChatSetLang === 'function') {
+      window.azzarChatSetLang(event.data.azzarSetLang);
+    }
+  }
+});
+```
+
+## Supported Languages
+
+The widget supports instant welcome message generation in all these languages (and more can be added):
+
+- en: English
+- id: Bahasa Indonesia
+- ms: Bahasa Melayu
+- jv: Javanese
+- su: Sundanese
+- fr: French
+- de: German
+- es: Spanish
+- it: Italian
+- pt: Portuguese
+- ru: Russian
+- zh: Chinese
+- ja: Japanese
+- ko: Korean
+- ar: Arabic
+- hi: Hindi
+- th: Thai
+- vi: Vietnamese
+- nl: Dutch
+- tr: Turkish
+- pl: Polish
+- sv: Swedish
+- fi: Finnish
+- da: Danish
+- no: Norwegian
+- ro: Romanian
+- hu: Hungarian
+- cs: Czech
+- el: Greek
+- he: Hebrew
+- uk: Ukrainian
+- fa: Persian
+- ur: Urdu
+
+## Adding More Languages
+
+To add more languages to the demo or widget:
+- Add a new button to the demo page's language switcher UI and update the `postLangToIframe` handler.
+- Add the language code and full name to the `langMap` in the backend (`src/index.js`).
+- The widget and backend will handle the rest automatically.
+
+## Advanced Integration
+
+- The widget supports dynamic language switching via API, UI, or even `<html lang>` changes (thanks to a MutationObserver).
+- The demo page demonstrates best practices for cross-frame communication and robust multilingual support. 
