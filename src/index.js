@@ -488,6 +488,33 @@ export default {
         });
       }
       
+      // Add: Handle welcome message API
+      if (url.pathname === '/api/welcome-message' && request.method === 'GET') {
+        // Load systemInstruction.txt
+        const systemPrompt = await getSystemPrompt(request.url, env);
+        // Extract first non-comment, non-empty line
+        let welcome = '';
+        if (systemPrompt) {
+          const lines = systemPrompt.split('\n');
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed && !trimmed.startsWith('#') && !trimmed.startsWith('---')) {
+              welcome = trimmed;
+              break;
+            }
+          }
+        }
+        if (!welcome) {
+          welcome = 'Halo! saya Azzar. Freelance developer & educator dari Jogja. Ada yang bisa dibantu?';
+        }
+        return new Response(JSON.stringify({ welcome }), {
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        });
+      }
+      
       // Handle cache stats request (for debugging)
       if (url.pathname === '/api/cache-stats' && request.method === 'GET') {
         const stats = {
@@ -1363,12 +1390,21 @@ function generateWidgetHTML(url) {
     let conversationHistory = [];
     const MAX_HISTORY = 10; // Keep last 5 exchanges (10 messages)
     
-    // Initialize with the welcome message
-    const welcomeMsg = 'Halo! saya Azzar. Freelance developer & educator dari Jogja. Ada yang bisa dibantu?';
-    
     // Load conversation history from localStorage if available
-    const loadConversationHistory = () => {
+    const loadConversationHistory = async () => {
       const savedHistory = localStorage.getItem('azzarChatHistory');
+      let welcomeMsg = '';
+      // Fetch welcome message from API
+      try {
+        const resp = await fetch('/api/welcome-message');
+        if (resp.ok) {
+          const data = await resp.json();
+          welcomeMsg = data.welcome || '';
+        }
+      } catch (e) {}
+      if (!welcomeMsg) {
+        welcomeMsg = 'Halo! saya Azzar. Freelance developer & educator dari Jogja. Ada yang bisa dibantu?';
+      }
       if (savedHistory) {
         try {
           conversationHistory = JSON.parse(savedHistory);
@@ -1391,7 +1427,6 @@ function generateWidgetHTML(url) {
           content: welcomeMsg
         }];
       }
-      
       // Save the initial history
       saveConversationHistory();
     };
@@ -1491,17 +1526,29 @@ function generateWidgetHTML(url) {
       // Clear UI
       messagesContainer.innerHTML = '';
       // Add back welcome message
-      const welcomeDiv = document.createElement('div');
-      welcomeDiv.className = 'message ai-message';
-      welcomeDiv.textContent = welcomeMsg;
-      messagesContainer.appendChild(welcomeDiv);
-      
-      // Reset history
-      conversationHistory = [{
-        role: 'assistant',
-        content: welcomeMsg
-      }];
-      saveConversationHistory();
+      (async () => {
+        let welcomeMsg = '';
+        try {
+          const resp = await fetch('/api/welcome-message');
+          if (resp.ok) {
+            const data = await resp.json();
+            welcomeMsg = data.welcome || '';
+          }
+        } catch (e) {}
+        if (!welcomeMsg) {
+          welcomeMsg = 'Halo! saya Azzar. Freelance developer & educator dari Jogja. Ada yang bisa dibantu?';
+        }
+        const welcomeDiv = document.createElement('div');
+        welcomeDiv.className = 'message ai-message';
+        welcomeDiv.textContent = welcomeMsg;
+        messagesContainer.appendChild(welcomeDiv);
+        // Reset history
+        conversationHistory = [{
+          role: 'assistant',
+          content: welcomeMsg
+        }];
+        saveConversationHistory();
+      })();
     });
     
     // Load conversation history on page load
