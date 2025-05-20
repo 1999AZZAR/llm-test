@@ -493,9 +493,16 @@ export default {
         // Load systemInstruction.txt
         const systemPrompt = await getSystemPrompt(request.url, env);
         // Get requested language from query param, fallback to 'en'
-        const lang = url.searchParams.get('lang') || 'en';
+        const langCode = url.searchParams.get('lang') || 'en';
+        // Map language codes to full names
+        const langMap = {
+          en: 'English',
+          id: 'Bahasa Indonesia',
+          // add more as needed
+        };
+        const langName = langMap[langCode] || langCode;
         // Compose prompt for AI
-        const aiPrompt = `${systemPrompt}\n\nGenerate a short, friendly welcome message for a chat widget. The message should be in the following language: ${lang}. Only output the message, no explanations or extra text.`;
+        const aiPrompt = `${systemPrompt}\n\nGenerate a short, friendly welcome message for a chat widget. The message should be in ${langName}. Only output the message, no explanations or extra text.`;
         let welcome = '';
         try {
           if (env.AI) {
@@ -520,7 +527,7 @@ export default {
           // ignore, fallback below
         }
         if (!welcome) {
-          welcome = lang === 'id' ? 'Halo! saya Azzar. Freelance developer & educator dari Jogja. Ada yang bisa dibantu?' : 'Hi! I am Azzar, a freelance developer & educator from Jogja. How can I help you?';
+          welcome = langCode === 'id' ? 'Halo! saya Azzar. Freelance developer & educator dari Jogja. Ada yang bisa dibantu?' : 'Hi! I am Azzar, a freelance developer & educator from Jogja. How can I help you?';
         }
         return new Response(JSON.stringify({ welcome }), {
           headers: {
