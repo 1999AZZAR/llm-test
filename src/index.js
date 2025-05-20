@@ -840,17 +840,23 @@ function generateInstructionsHTML(baseUrl) {
   </footer>
   <script src="${baseUrl}/widget.js"></script>
   <script>
-    // Language switcher logic
+    // Language switcher logic with postMessage to iframe
     function setActiveLangBtn(lang) {
       document.getElementById('lang-en').classList.toggle('active', lang === 'en');
       document.getElementById('lang-id').classList.toggle('active', lang === 'id');
     }
+    function postLangToIframe(lang) {
+      var iframe = document.querySelector('.azzar-chat-iframe');
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage({ azzarSetLang: lang }, '*');
+      }
+    }
     document.getElementById('lang-en').addEventListener('click', function() {
-      if (window.azzarChatSetLang) window.azzarChatSetLang('en');
+      postLangToIframe('en');
       setActiveLangBtn('en');
     });
     document.getElementById('lang-id').addEventListener('click', function() {
-      if (window.azzarChatSetLang) window.azzarChatSetLang('id');
+      postLangToIframe('id');
       setActiveLangBtn('id');
     });
     // Set initial active button
@@ -1712,6 +1718,15 @@ function generateWidgetHTML(url) {
     
     // Load conversation history on page load
     loadConversationHistory();
+
+    // Add cross-frame language switching support
+    window.addEventListener('message', function(event) {
+      if (event.data && event.data.azzarSetLang) {
+        if (typeof window.azzarChatSetLang === 'function') {
+          window.azzarChatSetLang(event.data.azzarSetLang);
+        }
+      }
+    });
   </script>
 </body>
 </html>
