@@ -791,6 +791,28 @@ function generateWidgetJS(origin) {
   return `
 // Azzar AI Chat Widget
 (function() {
+  // Helper to get explicit language setting
+  function detectAzzarLang() {
+    // 1. window.AZZAR_CHAT_CONFIG.lang
+    if (window.AZZAR_CHAT_CONFIG && window.AZZAR_CHAT_CONFIG.lang) {
+      return window.AZZAR_CHAT_CONFIG.lang;
+    }
+    // 2. <script data-azzar-lang="...">
+    var scripts = document.querySelectorAll('script[data-azzar-lang]');
+    if (scripts.length > 0) {
+      return scripts[0].getAttribute('data-azzar-lang');
+    }
+    // 3. <html lang>
+    if (document.documentElement.lang) {
+      return document.documentElement.lang;
+    }
+    // 4. navigator.language
+    if (navigator.language) {
+      return navigator.language.split('-')[0];
+    }
+    return 'en';
+  }
+
   // Function to detect and apply the website's color scheme
   const detectColorScheme = () => {
     // Get computed styles from the document root or body
@@ -1407,11 +1429,9 @@ function generateWidgetHTML(url) {
     const MAX_HISTORY = 10; // Keep last 5 exchanges (10 messages)
     
     // Load conversation history from localStorage if available
-    const loadConversationHistory = async () => {
+    const loadConversationHistory = async (forceWelcome) => {
       const savedHistory = localStorage.getItem('azzarChatHistory');
-      // Detect language: try <html lang> first, then navigator.language
-      let lang = document.documentElement.lang || (navigator.language ? navigator.language.split('-')[0] : 'en');
-      if (!lang) lang = 'en';
+      let lang = window.azzarChatCurrentLang || 'en';
       let welcomeMsg = '';
       // Fetch welcome message from API with lang param
       try {
@@ -1426,7 +1446,7 @@ function generateWidgetHTML(url) {
       if (!welcomeMsg) {
         welcomeMsg = lang === 'id' ? 'Halo! saya Azzar. Freelance developer & educator dari Jogja. Ada yang bisa dibantu?' : 'Hi! I am Azzar, a freelance developer & educator from Jogja. How can I help you?';
       }
-      if (savedHistory) {
+      if (savedHistory && !forceWelcome) {
         try {
           conversationHistory = JSON.parse(savedHistory);
           // Display saved messages (clear first to avoid duplicating welcome message)
@@ -1442,11 +1462,13 @@ function generateWidgetHTML(url) {
           }];
         }
       } else {
-        // Initialize with welcome message if no history exists
+        // Initialize with welcome message if no history exists or forceWelcome
         conversationHistory = [{
           role: 'assistant',
           content: welcomeMsg
         }];
+        messagesContainer.innerHTML = '';
+        addMessageToUI('ai', welcomeMsg);
       }
       // Save the initial history
       saveConversationHistory();
@@ -1577,6 +1599,18 @@ function generateWidgetHTML(url) {
     
     // Load conversation history on page load
     loadConversationHistory();
+
+    // At the top of the iframe script:
+    window.azzarChatCurrentLang = detectAzzarLang();
+    window.azzarChatSetLang = function(newLang) {
+      if (typeof newLang === 'string' && newLang.length > 0) {
+        window.azzarChatCurrentLang = newLang;
+        // Reset chat with new language
+        if (typeof loadConversationHistory === 'function') {
+          loadConversationHistory(true); // pass true to force reload welcome message
+        }
+      }
+    };
   </script>
 </body>
 </html>
