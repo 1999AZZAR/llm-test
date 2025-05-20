@@ -498,7 +498,38 @@ export default {
         const langMap = {
           en: 'English',
           id: 'Bahasa Indonesia',
-          // add more as needed
+          ms: 'Bahasa Melayu',
+          jv: 'Javanese',
+          su: 'Sundanese',
+          fr: 'French',
+          de: 'German',
+          es: 'Spanish',
+          it: 'Italian',
+          pt: 'Portuguese',
+          ru: 'Russian',
+          zh: 'Chinese',
+          ja: 'Japanese',
+          ko: 'Korean',
+          ar: 'Arabic',
+          hi: 'Hindi',
+          th: 'Thai',
+          vi: 'Vietnamese',
+          nl: 'Dutch',
+          tr: 'Turkish',
+          pl: 'Polish',
+          sv: 'Swedish',
+          fi: 'Finnish',
+          da: 'Danish',
+          no: 'Norwegian',
+          ro: 'Romanian',
+          hu: 'Hungarian',
+          cs: 'Czech',
+          el: 'Greek',
+          he: 'Hebrew',
+          uk: 'Ukrainian',
+          fa: 'Persian',
+          ur: 'Urdu',
+          // Add more as needed
         };
         const langName = langMap[langCode] || langCode;
         // Compose prompt for AI
@@ -834,7 +865,7 @@ function generateWidgetJS(origin) {
   return `
 // Azzar AI Chat Widget
 (function() {
-  // Helper to get explicit language setting
+  // Helper to get explicit language setting (robust, always up-to-date)
   function detectAzzarLang() {
     // 1. window.AZZAR_CHAT_CONFIG.lang
     if (window.AZZAR_CHAT_CONFIG && window.AZZAR_CHAT_CONFIG.lang) {
@@ -855,6 +886,43 @@ function generateWidgetJS(origin) {
     }
     return 'en';
   }
+
+  // Robustly update language and regenerate welcome message
+  function setAzzarLang(newLang, force) {
+    if (typeof newLang === 'string' && newLang.length > 0) {
+      window.azzarChatCurrentLang = newLang;
+      // Always reset chat with new language
+      if (typeof loadConversationHistory === 'function') {
+        loadConversationHistory(true); // force reload welcome message
+      }
+    } else if (force) {
+      // If no lang provided but force is true, re-detect and reload
+      window.azzarChatCurrentLang = detectAzzarLang();
+      if (typeof loadConversationHistory === 'function') {
+        loadConversationHistory(true);
+      }
+    }
+  }
+
+  // Expose robust API
+  window.azzarChatSetLang = function(newLang) {
+    setAzzarLang(newLang, true);
+  };
+
+  // Observe <html lang> changes for dynamic language switching
+  if (window.MutationObserver) {
+    const htmlObserver = new MutationObserver(function(mutations) {
+      for (const mutation of mutations) {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'lang') {
+          setAzzarLang(document.documentElement.lang, true);
+        }
+      }
+    });
+    htmlObserver.observe(document.documentElement, { attributes: true });
+  }
+
+  // On widget load, always use robust detection
+  window.azzarChatCurrentLang = detectAzzarLang();
 
   // Function to detect and apply the website's color scheme
   const detectColorScheme = () => {
@@ -1474,7 +1542,7 @@ function generateWidgetHTML(url) {
     // Load conversation history from localStorage if available
     const loadConversationHistory = async (forceWelcome) => {
       const savedHistory = localStorage.getItem('azzarChatHistory');
-      let lang = window.azzarChatCurrentLang || 'en';
+      let lang = window.azzarChatCurrentLang || detectAzzarLang() || 'en';
       let welcomeMsg = '';
       // Fetch welcome message from API with lang param
       try {
@@ -1503,6 +1571,8 @@ function generateWidgetHTML(url) {
             role: 'assistant',
             content: welcomeMsg
           }];
+          messagesContainer.innerHTML = '';
+          addMessageToUI('ai', welcomeMsg);
         }
       } else {
         // Initialize with welcome message if no history exists or forceWelcome
@@ -1642,18 +1712,6 @@ function generateWidgetHTML(url) {
     
     // Load conversation history on page load
     loadConversationHistory();
-
-    // At the top of the iframe script:
-    window.azzarChatCurrentLang = detectAzzarLang();
-    window.azzarChatSetLang = function(newLang) {
-      if (typeof newLang === 'string' && newLang.length > 0) {
-        window.azzarChatCurrentLang = newLang;
-        // Reset chat with new language
-        if (typeof loadConversationHistory === 'function') {
-          loadConversationHistory(true); // pass true to force reload welcome message
-        }
-      }
-    };
   </script>
 </body>
 </html>
