@@ -1225,7 +1225,7 @@ function generateWidgetHTML(url) {
   <div class="chat-container">
     <div class="messages" id="messages">
       <div class="message ai-message">
-        Halo! Aku Azzar. Freelance developer & educator dari Jogja. Ada yang bisa dibantu?
+        Halo! saya Azzar. Freelance developer & educator dari Jogja. Ada yang bisa dibantu?
       </div>
     </div>
     <div class="typing-indicator" id="typing-indicator">
@@ -1364,7 +1364,7 @@ function generateWidgetHTML(url) {
     const MAX_HISTORY = 10; // Keep last 5 exchanges (10 messages)
     
     // Initialize with the welcome message
-    const welcomeMsg = 'Halo! Aku Azzar. Freelance developer & educator dari Jogja. Ada yang bisa dibantu?';
+    const welcomeMsg = 'Halo! saya Azzar. Freelance developer & educator dari Jogja. Ada yang bisa dibantu?';
     
     // Load conversation history from localStorage if available
     const loadConversationHistory = () => {
