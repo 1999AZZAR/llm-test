@@ -246,8 +246,8 @@ async function sendToAI(messages, env) {
     
     // Set maximum output tokens - leaving space based on input tokens
     // Model context limit is about 8k-16k tokens depending on the specific model
-    // Let's target staying within 8k total tokens for safety
-    const MAX_CONTEXT_TOKENS = 8000;
+    // Let's target staying within 6.5k total tokens for safety
+    const MAX_CONTEXT_TOKENS = 6500;
     const MAX_OUTPUT_TOKENS = Math.max(250, MAX_CONTEXT_TOKENS - inputTokens - 150); 
     
     console.log(`Approximate input tokens: ${inputTokens}, setting max output tokens: ${MAX_OUTPUT_TOKENS}`);
