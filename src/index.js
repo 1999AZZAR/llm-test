@@ -90,7 +90,7 @@ function shouldUseWikipedia(message) {
     console.log('Query pertains to persona, skipping Wikipedia.');
     return false; // AI should answer this from persona
   }
-
+  
   return informationPatterns.some(pattern => pattern.test(message));
 }
 
@@ -248,7 +248,7 @@ async function sendToAI(messages, env) {
     // Model context limit is about 8k-16k tokens depending on the specific model
     // Let's target staying within 8k total tokens for safety
     const MAX_CONTEXT_TOKENS = 8000;
-    const MAX_OUTPUT_TOKENS = Math.max(500, MAX_CONTEXT_TOKENS - inputTokens - 100); // 100 token buffer
+    const MAX_OUTPUT_TOKENS = Math.max(250, MAX_CONTEXT_TOKENS - inputTokens - 150); 
     
     console.log(`Approximate input tokens: ${inputTokens}, setting max output tokens: ${MAX_OUTPUT_TOKENS}`);
     
@@ -297,7 +297,7 @@ async function sendToAI(messages, env) {
     
     // Clean up the response text formatting
     responseText = cleanupFormatting(responseText);
-
+    
     console.log('AI Response (Pre-Deduplication):', JSON.stringify(responseText)); // Log before de-duplication
 
     // More Advanced Deduplication: Look for characteristic sentence repetition
@@ -352,7 +352,7 @@ async function sendToAI(messages, env) {
         if (wikipediaInfo.title.toLowerCase() !== "no wikipedia articles found for this query." && 
             wikipediaInfo.title.length > 0 && 
             !responseText.toLowerCase().includes(wikipediaInfo.title.toLowerCase())) { // Avoid re-adding if title already mentioned
-            responseText += `\n\nSource: [Wikipedia - ${wikipediaInfo.title}](${cleanUrl})`;
+        responseText += `\n\nSource: [Wikipedia - ${wikipediaInfo.title}](${cleanUrl})`;
         }
       }
     }
@@ -675,14 +675,14 @@ async function fetchTextFile(fileName, baseUrl, env, defaultContent = '') {
     // Method 3: Try from KV storage if available (specifically for systemInstruction.txt via SYSTEM_PROMPT)
     if (fileName === 'systemInstruction.txt') {
       if (env && env.SYSTEM_PROMPT) {
-        try {
+      try {
           console.log(`Trying to fetch ${fileName} from SYSTEM_PROMPT KV binding`);
           // The key in this KV is 'systemInstruction.txt' as per deploy.sh
           const content = await env.SYSTEM_PROMPT.get('systemInstruction.txt'); 
-          if (content) {
+        if (content) {
             console.log(`Successfully loaded ${fileName} from SYSTEM_PROMPT KV (${content.length} chars)`);
-            return content;
-          } else {
+          return content;
+        } else {
             console.log(`File ${fileName} not found in SYSTEM_PROMPT KV`);
           }
         } catch (e) {
