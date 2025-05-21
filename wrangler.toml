@@ -8,3 +8,11 @@ enabled = true
 
 [ai]
 binding = "AI"
+
+[[kv_namespaces]]
+binding = "SYSTEM_PROMPT"
+id = "c5b17d99100540cab8837900b61d9c76"
+
+[[kv_namespaces]]
+binding = "RATE_LIMITER_KV"
+id = "efe51f08b6734a86bb39c71b10cf0da4"

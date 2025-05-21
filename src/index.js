@@ -335,6 +335,40 @@ export default {
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     };
+
+    // Rate Limiting Logic
+    const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown_ip';
+    if (clientIP !== 'unknown_ip' && env.RATE_LIMITER_KV) {
+      try {
+        const now = Date.now();
+        const currentMinute = Math.floor(now / 60000); // Timestamp for the current minute
+        const key = `rate_limit:${clientIP}:${currentMinute}`;
+
+        const currentCount = await env.RATE_LIMITER_KV.get(key);
+        let count = currentCount ? parseInt(currentCount) : 0;
+
+        if (count >= 100) {
+          // Log the rate limit event
+          console.log(`Rate limit exceeded for IP: ${clientIP}. Count: ${count}`);
+          return new Response(JSON.stringify({ error: 'Too Many Requests' }), { 
+            status: 429,
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json'
+            }
+          });
+        }
+
+        count++;
+        // Store the new count with a TTL of 60 seconds (to cover the current minute)
+        // For a more precise 1-minute window, consider setting TTL to 60 from the start of the minute
+        // For simplicity, a 60s TTL from the time of write is often sufficient.
+        await env.RATE_LIMITER_KV.put(key, count.toString(), { expirationTtl: 60 });
+      } catch (e) {
+        console.error('Rate limiter KV error:', e);
+        // If rate limiter fails, proceed without limiting for now, or handle as per policy
+      }
+    }
     
     // Handle CORS preflight requests
     if (request.method === 'OPTIONS') {
