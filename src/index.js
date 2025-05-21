@@ -297,6 +297,23 @@ async function sendToAI(messages, env) {
     
     // Clean up the response text formatting
     responseText = cleanupFormatting(responseText);
+
+    // Post-process to remove simple block duplications
+    if (responseText) {
+      const paragraphs = responseText.split(/\n\n+/); // Split by one or more double newlines
+      if (paragraphs.length > 1) {
+        const uniqueParagraphs = [];
+        uniqueParagraphs.push(paragraphs[0]);
+        for (let i = 1; i < paragraphs.length; i++) {
+          // Only add if the current paragraph is not identical to the previous one
+          // and is not empty/whitespace only.
+          if (paragraphs[i].trim() !== '' && paragraphs[i].trim() !== paragraphs[i-1].trim()) {
+            uniqueParagraphs.push(paragraphs[i]);
+          }
+        }
+        responseText = uniqueParagraphs.join('\n\n');
+      }
+    }
     
     console.log('Final extracted response text:', responseText);
     
@@ -468,8 +485,8 @@ export default {
       
       // Add: Handle welcome message API
       if (url.pathname === '/api/welcome-message' && request.method === 'GET') {
-        // Load systemInstruction.txt
-        const systemPrompt = await getSystemPrompt(request.url, env);
+        // Load systemInstruction.txt to get the base persona
+        const baseSystemPrompt = await getSystemPrompt(request.url, env);
         // Get requested language from query param, fallback to 'en'
         const langCode = url.searchParams.get('lang') || 'en';
         // Map language codes to full names
@@ -510,15 +527,18 @@ export default {
           // Add more as needed
         };
         const langName = langMap[langCode] || langCode;
-        // Compose prompt for AI
-        const aiPrompt = `${systemPrompt}\n\nGenerate a short, friendly welcome message for a chat widget. The message should be in ${langName}. Only output the message, no explanations or extra text.`;
+        // Compose prompt for AI, ensuring it knows its name is FREA
+        // The baseSystemPrompt already contains the FREA persona definition.
+        const aiPromptForWelcome = `You are FREA, an AI assistant. Generate a short, friendly welcome message for a chat widget, introducing yourself as FREA. The message should be in ${langName}. Only output the message, no explanations or extra text. Use the persona defined in the system instructions.`;
+        
         let welcome = '';
         try {
           if (env.AI) {
             const aiResp = await env.AI.run('@cf/meta/llama-3.1-70b-instruct', {
               messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: aiPrompt }
+                // Provide the full system prompt which defines FREA
+                { role: 'system', content: baseSystemPrompt }, 
+                { role: 'user', content: aiPromptForWelcome }
               ],
               max_tokens: 100
             });
@@ -533,10 +553,12 @@ export default {
             }
           }
         } catch (e) {
+          console.error('Error generating AI welcome message:', e);
           // ignore, fallback below
         }
         if (!welcome) {
-          welcome = langCode === 'id' ? 'Halo! saya Azzar. Freelance developer & educator dari Jogja. Ada yang bisa dibantu?' : 'Hi! I am Azzar, a freelance developer & educator from Jogja. How can I help you?';
+          // Fallback messages updated to use FREA
+          welcome = langCode === 'id' ? 'Halo! Saya FREA, asisten AI Anda. Ada yang bisa saya bantu?' : 'Hi! I am FREA, your AI assistant. How can I help you?';
         }
         return new Response(JSON.stringify({ welcome }), {
           headers: {
