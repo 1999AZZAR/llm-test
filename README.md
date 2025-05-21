@@ -94,19 +94,14 @@ The widget will fetch a new welcome message and reset the conversation history i
 
 ### 3. API Endpoints
 
+For detailed information on all available API endpoints, request/response schemas, and parameters, please see the dedicated [API Reference (API.md)](./API.md).
+
+Brief overview:
+- **GET `/widget.js`**: Serves the widget's JavaScript.
+- **GET `/widget-iframe`**: Serves the widget's iframe HTML.
 - **POST `/api/chat`**: Send a message and conversation history, get an AI response.
 - **GET `/api/welcome-message?lang=xx`**: Get a language-aware, AI-generated welcome message.
-
-**Example request:**
-```json
-{
-  "message": "User message here",
-  "history": [
-    {"role": "user", "content": "Previous user message"},
-    {"role": "assistant", "content": "Previous AI response"}
-  ]
-}
-```
+- **GET `/api/cache-stats`**: Get statistics about the in-memory cache (for debugging).
 
 ## Example: Full Integration
 

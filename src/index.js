@@ -609,23 +609,28 @@ async function fetchTextFile(fileName, baseUrl, env, defaultContent = '') {
       console.log('ASSETS binding not available');
     }
     
-    // Method 3: Try from KV storage if available
-    if (env && env.KV) {
-      try {
-        console.log(`Trying to fetch ${fileName} from KV binding`);
-        const content = await env.KV.get(fileName);
-        if (content) {
-          console.log(`Successfully loaded ${fileName} from KV (${content.length} chars)`);
-          return content;
-        } else {
-          console.log(`File ${fileName} not found in KV`);
+    // Method 3: Try from KV storage if available (specifically for systemInstruction.txt via SYSTEM_PROMPT)
+    if (fileName === 'systemInstruction.txt') {
+      if (env && env.SYSTEM_PROMPT) {
+        try {
+          console.log(`Trying to fetch ${fileName} from SYSTEM_PROMPT KV binding`);
+          // The key in this KV is 'systemInstruction.txt' as per deploy.sh
+          const content = await env.SYSTEM_PROMPT.get('systemInstruction.txt'); 
+          if (content) {
+            console.log(`Successfully loaded ${fileName} from SYSTEM_PROMPT KV (${content.length} chars)`);
+            return content;
+          } else {
+            console.log(`File ${fileName} not found in SYSTEM_PROMPT KV`);
+          }
+        } catch (e) {
+          console.log(`Error accessing ${fileName} from SYSTEM_PROMPT KV:`, e);
         }
-      } catch (e) {
-        console.log(`Error accessing ${fileName} from KV:`, e);
+      } else {
+        console.log('SYSTEM_PROMPT KV binding not available for systemInstruction.txt');
       }
-    } else {
-      console.log('KV binding not available');
     }
+    // For other files (e.g. crawl.txt), KV fetch is skipped here if no other generic KV logic exists.
+    // They will fall through to subsequent methods if not found by earlier ones.
     
     // Method 4: Try absolute URL with appropriate headers
     try {
@@ -652,7 +657,7 @@ async function fetchTextFile(fileName, baseUrl, env, defaultContent = '') {
     // Method 5: Try with embedded content as a fallback
     if (fileName === 'systemInstruction.txt') {
       console.log('Using embedded systemInstruction.txt content');
-      return `You are Azzar, a helpful AI assistant who specializes in web development, microcontrollers, and IoT technology. You\'re created by a freelance engineer from Yogyakarta, Indonesia. You\'re friendly, knowledgeable, and always willing to help with technical questions.`;
+      return `You are FREA, an assistant based on Azzar persona, a helpful AI assistant who specializes in web development, microcontrollers, and IoT technology. You\'re created by a freelance engineer from Yogyakarta, Indonesia. You\'re friendly, knowledgeable, and always willing to help with technical questions.`;
     } else if (fileName === 'crawl.txt') {
       console.log('Using embedded crawl.txt content');
       return `https://github.com/1999AZZAR
@@ -680,7 +685,7 @@ async function getSystemPrompt(requestUrl, env) {
   const baseUrl = `${currentUrl.protocol}//${currentUrl.host}`;
   
   // Default system prompt if all methods fail
-  const defaultPrompt = "You are Azzar, a helpful AI assistant who specializes in web development, microcontrollers, and IoT technology. You\'re created by a freelance engineer from Yogyakarta, Indonesia. You\'re friendly, knowledgeable, and always willing to help with technical questions.";
+  const defaultPrompt = "You are FREA, an assistant based on Azzar persona, a helpful AI assistant who specializes in web development, microcontrollers, and IoT technology. You\'re created by a freelance engineer from Yogyakarta, Indonesia. You\'re friendly, knowledgeable, and always willing to help with technical questions.";
   
   return await fetchTextFile('systemInstruction.txt', baseUrl, env, defaultPrompt);
 }
