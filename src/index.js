@@ -298,16 +298,42 @@ async function sendToAI(messages, env) {
     // Clean up the response text formatting
     responseText = cleanupFormatting(responseText);
 
-    // Post-process to remove simple block duplications
+    console.log('AI Response (Pre-Deduplication):', JSON.stringify(responseText)); // Log before de-duplication
+
+    // More Advanced Deduplication: Look for characteristic sentence repetition
+    if (responseText) {
+      const creatorIntroPattern = /^(My creator is azzar|azzar Budiyanto is a freelance)/i;
+      const parts = responseText.split(creatorIntroPattern);
+      
+      // If the pattern splits the text into 3 or more parts, 
+      // it means the intro phrase appeared at least twice.
+      // parts[0] would be anything before the first intro (should be empty or small)
+      // parts[1] would be the first matched intro phrase
+      // parts[2] would be the content between the first and second intro phrase
+      // parts[3] would be the second matched intro phrase, etc.
+      if (parts.length >= 4 && parts[1] && parts[3]) { // Intro phrase found twice
+        // Reconstruct using the first instance: intro + content after it until the next intro
+        // Ensure parts[1] (first intro) and parts[2] (content after first intro) are not undefined.
+        const firstInstance = (parts[1] || "") + (parts[2] || "");
+        // Check if the first instance is substantial before deciding to use it exclusively.
+        if (firstInstance.trim().length > 50) { // Arbitrary length to ensure it's not just a short fragment
+            console.log('Advanced deduplication: Detected repeated creator intro. Keeping first instance.');
+            responseText = firstInstance.trim();
+        } else {
+            console.log('Advanced deduplication: Detected repeated intro, but first instance too short. Falling back to paragraph dedupe.');
+        }
+      }
+    }
+
+    // Post-process to remove simple block duplications (applied after advanced or if advanced didn't trigger)
     if (responseText) {
       const paragraphs = responseText.split(/\n\n+/); // Split by one or more double newlines
       if (paragraphs.length > 1) {
         const uniqueParagraphs = [];
-        uniqueParagraphs.push(paragraphs[0]);
+        if (paragraphs[0]) uniqueParagraphs.push(paragraphs[0]);
         for (let i = 1; i < paragraphs.length; i++) {
-          // Only add if the current paragraph is not identical to the previous one
-          // and is not empty/whitespace only.
-          if (paragraphs[i].trim() !== '' && paragraphs[i].trim() !== paragraphs[i-1].trim()) {
+          if (paragraphs[i] && paragraphs[i].trim() !== '' && 
+              (!paragraphs[i-1] || paragraphs[i].trim() !== paragraphs[i-1].trim())) {
             uniqueParagraphs.push(paragraphs[i]);
           }
         }
@@ -315,7 +341,7 @@ async function sendToAI(messages, env) {
       }
     }
     
-    console.log('Final extracted response text:', responseText);
+    console.log('Final extracted response text (Post-Deduplication):', responseText);
     
     // If we used Wikipedia, add a citation
     if (wikipediaInfo && wikipediaInfo.success && wikipediaInfo.url && wikipediaInfo.title) {
