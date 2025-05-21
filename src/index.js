@@ -79,7 +79,18 @@ function shouldUseWikipedia(message) {
     /when was/i, /where is/i, /how does/i, /definition of/i,
     /explain/i, /describe/i, /history of/i, /facts about/i
   ];
-  
+
+  // Keywords that suggest the AI should answer from its persona, not Wikipedia
+  const personaKeywords = [
+    /you/i, /your/i, /creator/i, /azzar/i, /frea/i, // FREA is the bot's name
+    /who made you/i, /who created you/i
+  ];
+
+  if (personaKeywords.some(pattern => pattern.test(message))) {
+    console.log('Query pertains to persona, skipping Wikipedia.');
+    return false; // AI should answer this from persona
+  }
+
   return informationPatterns.some(pattern => pattern.test(message));
 }
 
@@ -290,12 +301,16 @@ async function sendToAI(messages, env) {
     console.log('Final extracted response text:', responseText);
     
     // If we used Wikipedia, add a citation
-    if (wikipediaInfo && wikipediaInfo.success) {
-      // Check if the response doesn't already contain the citation
+    if (wikipediaInfo && wikipediaInfo.success && wikipediaInfo.url && wikipediaInfo.title) {
+      // Check if the response doesn't already contain the citation URL
       if (!responseText.includes(wikipediaInfo.url)) {
-        // Make sure there are no spaces in the URL
         const cleanUrl = wikipediaInfo.url.replace(/\s+/g, '');
-        responseText += `\n\nSource: [Wikipedia - ${wikipediaInfo.title}](${cleanUrl})`;
+        // Also check if the title seems reasonable (not a placeholder or error)
+        if (wikipediaInfo.title.toLowerCase() !== "no wikipedia articles found for this query." && 
+            wikipediaInfo.title.length > 0 && 
+            !responseText.toLowerCase().includes(wikipediaInfo.title.toLowerCase())) { // Avoid re-adding if title already mentioned
+            responseText += `\n\nSource: [Wikipedia - ${wikipediaInfo.title}](${cleanUrl})`;
+        }
       }
     }
     
