@@ -258,7 +258,7 @@ export function generateWidgetJS(origin) {
             }
             70% {
               box-shadow: 0 0 0 12px \${newColors.primaryColor.replace(')', ', 0)')};
-              transform: scale(1.03);
+              transform: scale(1.5);
             }
             100% {
               box-shadow: 0 0 0 0 \${newColors.primaryColor.replace(')', ', 0)')};
