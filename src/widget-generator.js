@@ -264,7 +264,8 @@ export function generateWidgetJS(origin) {
         textOnPrimaryColor: encodeURIComponent(colors.textOnPrimaryColor),
         backgroundColor: encodeURIComponent(colors.backgroundColor),
         nonaryColor: encodeURIComponent(colors.nonaryColor),
-        octonaryColor: encodeURIComponent(colors.octonaryColor)
+        octonaryColor: encodeURIComponent(colors.octonaryColor),
+        lang: encodeURIComponent(window.azzarChatCurrentLang || detectAzzarLang())
       }).toString();
       
       iframe.src = '${origin}/widget-iframe?' + colorParams;
@@ -301,7 +302,8 @@ export function generateWidgetJS(origin) {
           textOnPrimaryColor: encodeURIComponent(newColors.textOnPrimaryColor),
           backgroundColor: encodeURIComponent(newColors.backgroundColor),
           nonaryColor: encodeURIComponent(newColors.nonaryColor),
-          octonaryColor: encodeURIComponent(newColors.octonaryColor)
+          octonaryColor: encodeURIComponent(newColors.octonaryColor),
+          lang: encodeURIComponent(window.azzarChatCurrentLang || detectAzzarLang())
         }).toString();
         
         // Only reload if colors actually changed to prevent unnecessary refreshes
