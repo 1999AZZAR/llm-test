@@ -2,6 +2,8 @@ export function generateWidgetJS(origin) {
     return `
   // Azzar AI Chat Widget
   (function() {
+    console.log('[Azzar Widget] Script execution started.');
+
     // Helper to get explicit language setting (robust, always up-to-date)
     function detectAzzarLang() {
       // 1. window.AZZAR_CHAT_CONFIG.lang
@@ -129,6 +131,8 @@ export function generateWidgetJS(origin) {
     
     // Create widget container
     const createWidget = () => {
+      console.log('[Azzar Widget] createWidget: Start');
+
       // Detect the website's color scheme
       const colors = detectColorScheme();
       
@@ -260,6 +264,7 @@ export function generateWidgetJS(origin) {
       widget.appendChild(chatWindow);
       widget.appendChild(button);
       document.body.appendChild(widget);
+      console.log('[Azzar Widget] createWidget: Widget appended to body');
       
       // Toggle chat window when button is clicked
       button.addEventListener('click', () => {
