@@ -2,8 +2,6 @@ export function generateWidgetJS(origin) {
     return `
   // Azzar AI Chat Widget
   (function() {
-    console.log('[Azzar Widget] Script execution started.');
-
     // Helper to get explicit language setting (robust, always up-to-date)
     function detectAzzarLang() {
       // 1. window.AZZAR_CHAT_CONFIG.lang
@@ -131,48 +129,33 @@ export function generateWidgetJS(origin) {
     
     // Create widget container
     const createWidget = () => {
-      console.log('[Azzar Widget] createWidget: Start');
-
       // Detect the website's color scheme
       const colors = detectColorScheme();
       
-      // Helper to convert hex to RGB for the animation
-      const hexToRgb = (hex) => {
-        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-        return result ? {
-          r: parseInt(result[1], 16),
-          g: parseInt(result[2], 16),
-          b: parseInt(result[3], 16)
-        } : null;
-      };
-      
-      const primaryRgb = hexToRgb(colors.primaryColor);
-      colors.primaryColorRGB = primaryRgb ? (primaryRgb.r + ", " + primaryRgb.g + ", " + primaryRgb.b) : '98, 0, 238'; // Default to purple if conversion fails
-
       // Create widget styles with dynamic colors
       const style = document.createElement('style');
-      style.textContent = \\\`
-        @keyframes azzar-wave-animation {
+      style.textContent = \`
+        @keyframes azzarWaveAnimation {
           0% {
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(\\\${colors.primaryColorRGB}, 0.7);
+            box-shadow: 0 0 0 0 rgba(\${hexToRgb(colors.primaryColor)}, 0.7);
+            transform: scale(1);
           }
-          70% {
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3), 0 0 0 10px rgba(\\\${colors.primaryColorRGB}, 0);
+          50% {
+            box-shadow: 0 0 0 10px rgba(\${hexToRgb(colors.primaryColor)}, 0.0);
+            transform: scale(1.05);
           }
           100% {
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(\\\${colors.primaryColorRGB}, 0);
+            box-shadow: 0 0 0 0 rgba(\${hexToRgb(colors.primaryColor)}, 0.0);
+            transform: scale(1);
           }
         }
-
+        
         .azzar-chat-widget {
           position: fixed;
           bottom: 20px;
           right: 20px;
           z-index: 9999;
           font-family: 'Roboto', Arial, sans-serif;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          animation: azzar-wave-animation 2s infinite;
         }
         
         .azzar-chat-button {
@@ -186,12 +169,14 @@ export function generateWidgetJS(origin) {
           align-items: center;
           justify-content: center;
           cursor: pointer;
-          transition: all 0.3s ease;
+          transition: transform 0.3s ease;
+          animation: azzarWaveAnimation 2s infinite ease-in-out;
         }
         
         .azzar-chat-button:hover {
           background-color: \${colors.primaryDarkColor};
           transform: scale(1.05);
+          animation-play-state: paused;
         }
         
         .azzar-chat-icon {
@@ -226,8 +211,34 @@ export function generateWidgetJS(origin) {
           height: 100%;
           border: none;
         }
-      \\\`;
+      \`;
       document.head.appendChild(style);
+      
+      // Helper function to convert hex to RGB
+      function hexToRgb(hex) {
+        // Remove # if present
+        hex = hex.replace(/^#/, '');
+        
+        // Convert 3-digit hex to 6-digits
+        if (hex.length === 3) {
+          hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+        }
+        
+        // If it's already RGB format, extract values
+        if (hex.startsWith('rgb')) {
+          const rgb = hex.match(/\d+/g);
+          if (rgb && rgb.length >= 3) {
+            return rgb.slice(0, 3).join(', ');
+          }
+        }
+        
+        // Parse hex values
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        
+        return isNaN(r) || isNaN(g) || isNaN(b) ? '98, 0, 238' : \`\${r}, \${g}, \${b}\`;
+      }
       
       // Create widget container
       const widget = document.createElement('div');
@@ -264,11 +275,17 @@ export function generateWidgetJS(origin) {
       widget.appendChild(chatWindow);
       widget.appendChild(button);
       document.body.appendChild(widget);
-      console.log('[Azzar Widget] createWidget: Widget appended to body');
       
       // Toggle chat window when button is clicked
       button.addEventListener('click', () => {
         chatWindow.classList.toggle('open');
+        // Stop animation when chat window is opened
+        if (chatWindow.classList.contains('open')) {
+          button.style.animation = 'none';
+        } else {
+          // Resume animation when closed
+          button.style.animation = 'azzarWaveAnimation 2s infinite ease-in-out';
+        }
       });
       
       // Function to update colors when theme changes
@@ -290,6 +307,34 @@ export function generateWidgetJS(origin) {
         // Only reload if colors actually changed to prevent unnecessary refreshes
         if (iframe.src.split('?')[1] !== newColorParams) {
           iframe.src = '${origin}/widget-iframe?' + newColorParams;
+        }
+        
+        // Update animation with new colors
+        const newStyle = document.createElement('style');
+        newStyle.textContent = \`
+          @keyframes azzarWaveAnimation {
+            0% {
+              box-shadow: 0 0 0 0 rgba(\${hexToRgb(newColors.primaryColor)}, 0.7);
+              transform: scale(1);
+            }
+            50% {
+              box-shadow: 0 0 0 10px rgba(\${hexToRgb(newColors.primaryColor)}, 0.0);
+              transform: scale(1.05);
+            }
+            100% {
+              box-shadow: 0 0 0 0 rgba(\${hexToRgb(newColors.primaryColor)}, 0.0);
+              transform: scale(1);
+            }
+          }
+        \`;
+        document.head.appendChild(newStyle);
+        
+        // Reset animation to apply new keyframes
+        if (!chatWindow.classList.contains('open')) {
+          button.style.animation = 'none';
+          // Trigger reflow
+          void button.offsetWidth;
+          button.style.animation = 'azzarWaveAnimation 2s infinite ease-in-out';
         }
       };
       
