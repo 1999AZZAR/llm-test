@@ -143,7 +143,7 @@ export function generateWidgetJS(origin) {
       };
       
       const primaryRgb = hexToRgb(colors.primaryColor);
-      colors.primaryColorRGB = primaryRgb ? `${primaryRgb.r}, ${primaryRgb.g}, ${primaryRgb.b}` : '98, 0, 238'; // Default to purple if conversion fails
+      colors.primaryColorRGB = primaryRgb ? (primaryRgb.r + ", " + primaryRgb.g + ", " + primaryRgb.b) : '98, 0, 238'; // Default to purple if conversion fails
 
       // Create widget styles with dynamic colors
       const style = document.createElement('style');
