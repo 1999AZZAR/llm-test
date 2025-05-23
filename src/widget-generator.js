@@ -147,16 +147,16 @@ export function generateWidgetJS(origin) {
 
       // Create widget styles with dynamic colors
       const style = document.createElement('style');
-      style.textContent = \`
+      style.textContent = \\`
         @keyframes azzar-wave-animation {
           0% {
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(${colors.primaryColorRGB}, 0.7);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(\\\${colors.primaryColorRGB}, 0.7);
           }
           70% {
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3), 0 0 0 10px rgba(${colors.primaryColorRGB}, 0);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3), 0 0 0 10px rgba(\\\${colors.primaryColorRGB}, 0);
           }
           100% {
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(${colors.primaryColorRGB}, 0);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(\\\${colors.primaryColorRGB}, 0);
           }
         }
 
