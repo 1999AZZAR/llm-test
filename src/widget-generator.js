@@ -132,15 +132,43 @@ export function generateWidgetJS(origin) {
       // Detect the website's color scheme
       const colors = detectColorScheme();
       
+      // Helper to convert hex to RGB for the animation
+      const hexToRgb = (hex) => {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16)
+        } : null;
+      };
+      
+      const primaryRgb = hexToRgb(colors.primaryColor);
+      colors.primaryColorRGB = primaryRgb ? `${primaryRgb.r}, ${primaryRgb.g}, ${primaryRgb.b}` : '98, 0, 238'; // Default to purple if conversion fails
+
       // Create widget styles with dynamic colors
       const style = document.createElement('style');
       style.textContent = \`
+        @keyframes azzar-wave-animation {
+          0% {
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(${colors.primaryColorRGB}, 0.7);
+          }
+          70% {
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3), 0 0 0 10px rgba(${colors.primaryColorRGB}, 0);
+          }
+          100% {
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(${colors.primaryColorRGB}, 0);
+          }
+        }
+
         .azzar-chat-widget {
           position: fixed;
           bottom: 20px;
           right: 20px;
           z-index: 9999;
           font-family: 'Roboto', Arial, sans-serif;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          animation: azzar-wave-animation 2s infinite;
         }
         
         .azzar-chat-button {
