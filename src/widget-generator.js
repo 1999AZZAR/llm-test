@@ -125,7 +125,7 @@ export function generateWidgetJS(origin) {
           }
           70% {
             box-shadow: 0 0 0 12px rgba(98, 0, 238, 0);
-            transform: scale(1.03);
+            transform: scale(1.1);
           }
           100% {
             box-shadow: 0 0 0 0 rgba(98, 0, 238, 0);

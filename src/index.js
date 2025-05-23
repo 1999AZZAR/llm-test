@@ -94,10 +94,23 @@ function shouldUseWikipedia(message) {
   return informationPatterns.some(pattern => pattern.test(message));
 }
 
-// Function to count tokens approximately
+// Function to count tokens approximately (improved version)
 function approximateTokenCount(text) {
-  // Simple approximation: 1 token ≈ 4 characters for English text
-  return Math.ceil(text.length / 4);
+  if (!text) return 0;
+  
+  // More accurate approximation:
+  // - Average English word is ~4.7 characters
+  // - Words are typically 1-2 tokens
+  // - Special characters and numbers count as separate tokens
+  
+  // Count words (approximate tokens from words)
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+  
+  // Count special tokens (numbers, symbols, etc.)
+  const specialChars = (text.match(/[^a-zA-Z\s]/g) || []).length;
+  
+  // Final approximation
+  return Math.ceil((wordCount * 1.3) + (specialChars * 0.5));
 }
 
 // Function to clean up excessive blank lines in text
@@ -133,6 +146,80 @@ function cleanupFormatting(text) {
   }
   
   return cleanedText;
+}
+
+// Enhanced deduplication function - this is the main improvement to fix duplicate responses
+function deduplicateResponse(text) {
+  if (!text) return text;
+  
+  // Step 1: Check for patterns related to creator/bot introduction that commonly repeat
+  const introPatterns = [
+    /^(My creator is azzar|azzar Budiyanto is a freelance)/i,
+    /^(FREA is an AI assistant|I am FREA, an AI assistant)/i,
+    /^(As an AI assistant|As FREA, an AI assistant)/i
+  ];
+  
+  for (const pattern of introPatterns) {
+    const parts = text.split(pattern);
+    // If we have multiple matches of the same intro pattern
+    if (parts.length >= 3) {
+      // First part is anything before first match, often empty
+      // Second part is the matched content in the first match and content after it
+      const firstSection = parts[0] + (pattern.source.replace(/^\^|\(|\).*$/g, '') + parts[1]);
+      
+      // Only keep the first section if it's substantial
+      if (firstSection.trim().length > 50) {
+        console.log('Deduplication: Found repeated introduction pattern, keeping first instance.');
+        return firstSection.trim();
+      }
+    }
+  }
+  
+  // Step 2: More general sentence-level deduplication
+  // This helps with cases where sentences repeat in different sections
+  const sentences = text.match(/[^.!?]+[.!?]+\s*/g);
+  if (sentences && sentences.length > 3) {
+    const uniqueSentences = [];
+    const seenSentences = new Set();
+    
+    for (const sentence of sentences) {
+      // Normalize sentence - strip whitespace, lowercase
+      const normalized = sentence.trim().toLowerCase();
+      // Skip very short sentences or common phrases
+      if (normalized.length < 10) {
+        uniqueSentences.push(sentence);
+        continue;
+      }
+      
+      // Check if we've seen this sentence before
+      if (!seenSentences.has(normalized)) {
+        uniqueSentences.push(sentence);
+        seenSentences.add(normalized);
+      }
+    }
+    
+    // If we removed any duplicates
+    if (uniqueSentences.length < sentences.length) {
+      console.log(`Deduplication: Removed ${sentences.length - uniqueSentences.length} duplicate sentences`);
+      return uniqueSentences.join('');
+    }
+  }
+  
+  // Step 3: Paragraph-level deduplication (original implementation)
+  const paragraphs = text.split(/\n\n+/); // Split by one or more double newlines
+  if (paragraphs.length > 1) {
+    const uniqueParagraphs = [];
+    if (paragraphs[0]) uniqueParagraphs.push(paragraphs[0]);
+    for (let i = 1; i < paragraphs.length; i++) {
+      if (paragraphs[i] && paragraphs[i].trim() !== '' && 
+          (!paragraphs[i-1] || paragraphs[i].trim() !== paragraphs[i-1].trim())) {
+        uniqueParagraphs.push(paragraphs[i]);
+      }
+    }
+    return uniqueParagraphs.join('\n\n');
+  }
+  
+  return text;
 }
 
 // Function to initialize KV cache if available
@@ -238,7 +325,7 @@ async function sendToAI(messages, env) {
       }
     }
     
-    // Calculate approximate token usage for input
+    // Calculate approximate token usage for input using our more accurate function
     let inputTokens = 0;
     messages.forEach(msg => {
       inputTokens += approximateTokenCount(msg.content);
@@ -252,14 +339,22 @@ async function sendToAI(messages, env) {
     
     console.log(`Approximate input tokens: ${inputTokens}, setting max output tokens: ${MAX_OUTPUT_TOKENS}`);
     
+    // Add instruction to prevent repetition
+    const systemMessageIndex = messages.findIndex(m => m.role === 'system');
+    if (systemMessageIndex !== -1) {
+      messages[systemMessageIndex].content += '\n\nIMPORTANT: Please provide a concise, non-repetitive response. Do not duplicate information within your answer.';
+    }
+    
     // Log cache miss and call the AI API
     console.log('Cache miss - calling AI service');
     const aiResponse = await env.AI.run('@cf/meta/llama-3.1-70b-instruct', {
       messages: messages,
-      max_tokens: MAX_OUTPUT_TOKENS
+      max_tokens: MAX_OUTPUT_TOKENS,
+      temperature: 0.7, // Add some temperature for more natural responses
+      top_p: 0.95      // Adjust top_p for more focused responses
     });
     
-    console.log('Raw AI response:', JSON.stringify(aiResponse, null, 2));
+    console.log('Raw AI response received');
     
     // Try to extract the response text
     let responseText;
@@ -298,50 +393,12 @@ async function sendToAI(messages, env) {
     // Clean up the response text formatting
     responseText = cleanupFormatting(responseText);
     
-    console.log('AI Response (Pre-Deduplication):', JSON.stringify(responseText)); // Log before de-duplication
+    console.log('AI Response (Pre-Deduplication):', responseText.substring(0, 100) + '...'); // Log start of response
 
-    // More Advanced Deduplication: Look for characteristic sentence repetition
-    if (responseText) {
-      const creatorIntroPattern = /^(My creator is azzar|azzar Budiyanto is a freelance)/i;
-      const parts = responseText.split(creatorIntroPattern);
-      
-      // If the pattern splits the text into 3 or more parts, 
-      // it means the intro phrase appeared at least twice.
-      // parts[0] would be anything before the first intro (should be empty or small)
-      // parts[1] would be the first matched intro phrase
-      // parts[2] would be the content between the first and second intro phrase
-      // parts[3] would be the second matched intro phrase, etc.
-      if (parts.length >= 4 && parts[1] && parts[3]) { // Intro phrase found twice
-        // Reconstruct using the first instance: intro + content after it until the next intro
-        // Ensure parts[1] (first intro) and parts[2] (content after first intro) are not undefined.
-        const firstInstance = (parts[1] || "") + (parts[2] || "");
-        // Check if the first instance is substantial before deciding to use it exclusively.
-        if (firstInstance.trim().length > 50) { // Arbitrary length to ensure it's not just a short fragment
-            console.log('Advanced deduplication: Detected repeated creator intro. Keeping first instance.');
-            responseText = firstInstance.trim();
-        } else {
-            console.log('Advanced deduplication: Detected repeated intro, but first instance too short. Falling back to paragraph dedupe.');
-        }
-      }
-    }
-
-    // Post-process to remove simple block duplications (applied after advanced or if advanced didn't trigger)
-    if (responseText) {
-      const paragraphs = responseText.split(/\n\n+/); // Split by one or more double newlines
-      if (paragraphs.length > 1) {
-        const uniqueParagraphs = [];
-        if (paragraphs[0]) uniqueParagraphs.push(paragraphs[0]);
-        for (let i = 1; i < paragraphs.length; i++) {
-          if (paragraphs[i] && paragraphs[i].trim() !== '' && 
-              (!paragraphs[i-1] || paragraphs[i].trim() !== paragraphs[i-1].trim())) {
-            uniqueParagraphs.push(paragraphs[i]);
-          }
-        }
-        responseText = uniqueParagraphs.join('\n\n');
-      }
-    }
+    // Apply our enhanced deduplication function
+    responseText = deduplicateResponse(responseText);
     
-    console.log('Final extracted response text (Post-Deduplication):', responseText);
+    console.log('Final extracted response text (Post-Deduplication):', responseText.substring(0, 100) + '...');
     
     // If we used Wikipedia, add a citation
     if (wikipediaInfo && wikipediaInfo.success && wikipediaInfo.url && wikipediaInfo.title) {
@@ -394,67 +451,83 @@ export default {
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     };
 
-    // Rate Limiting Logic
-    const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown_ip';
-    if (clientIP !== 'unknown_ip' && env.RATE_LIMITER_KV) {
-      try {
-        const now = Date.now();
-        const currentMinute = Math.floor(now / 60000); // Timestamp for the current minute
-        const key = `rate_limit:${clientIP}:${currentMinute}`;
-
-        const currentCount = await env.RATE_LIMITER_KV.get(key);
-        let count = currentCount ? parseInt(currentCount) : 0;
-
-        if (count >= 100) {
-          // Log the rate limit event
-          console.log(`Rate limit exceeded for IP: ${clientIP}. Count: ${count}`);
-          return new Response(JSON.stringify({ error: 'Too Many Requests' }), { 
-            status: 429,
-            headers: {
-              ...corsHeaders,
-              'Content-Type': 'application/json'
-            }
-          });
-        }
-
-        count++;
-        // Store the new count with a TTL of 60 seconds (to cover the current minute)
-        // For a more precise 1-minute window, consider setting TTL to 60 from the start of the minute
-        // For simplicity, a 60s TTL from the time of write is often sufficient.
-        await env.RATE_LIMITER_KV.put(key, count.toString(), { expirationTtl: 60 });
-      } catch (e) {
-        console.error('Rate limiter KV error:', e);
-        // If rate limiter fails, proceed without limiting for now, or handle as per policy
-      }
-    }
-    
-    // Handle CORS preflight requests
+    // Handle CORS preflight requests first (quick return)
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
         headers: corsHeaders
       });
     }
+
+    // Rate Limiting Logic - Process asynchronously to avoid blocking the response
+    const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown_ip';
+    let rateLimitExceeded = false;
+    
+    // Start rate limiting check in background
+    const rateLimitPromise = (async () => {
+      if (clientIP !== 'unknown_ip' && env.RATE_LIMITER_KV) {
+        try {
+          const now = Date.now();
+          const currentMinute = Math.floor(now / 60000);
+          const key = `rate_limit:${clientIP}:${currentMinute}`;
+          const currentCount = await env.RATE_LIMITER_KV.get(key);
+          const count = currentCount ? parseInt(currentCount) : 0;
+          
+          if (count >= 100) {
+            rateLimitExceeded = true;
+            console.log(`Rate limit exceeded for IP: ${clientIP}. Count: ${count}`);
+            return true;
+          }
+          
+          // Increment counter in the background (don't await)
+          env.RATE_LIMITER_KV.put(key, (count + 1).toString(), { expirationTtl: 60 })
+            .catch(e => console.error('Rate limiter increment error:', e));
+            
+          return false;
+        } catch (e) {
+          console.error('Rate limiter KV error:', e);
+          return false;
+        }
+      }
+      return false;
+    })();
     
     try {
-      // Serve the widget JS if requested
+      // Quick path for static assets with caching headers
       if (url.pathname === '/widget.js') {
         return new Response(generateWidgetJS(url.origin), {
           headers: { 
             'Content-Type': 'application/javascript',
+            'Cache-Control': 'max-age=3600', // Cache for 1 hour
             ...corsHeaders
           }
         });
       }
       
-      // Serve the iframe content if requested
       if (url.pathname === '/widget-iframe') {
         return new Response(generateWidgetHTML(url), {
           headers: { 
             'Content-Type': 'text/html',
+            'Cache-Control': 'max-age=3600', // Cache for 1 hour
             ...corsHeaders
           }
         });
+      }
+      
+      // For API endpoints, check rate limit before proceeding
+      if (url.pathname.startsWith('/api/')) {
+        // Wait for rate limit check to complete
+        const isRateLimited = await rateLimitPromise;
+        if (isRateLimited) {
+          return new Response(JSON.stringify({ error: 'Too Many Requests' }), { 
+            status: 429,
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json',
+              'Retry-After': '60'
+            }
+          });
+        }
       }
       
       // Handle chat API requests
@@ -473,11 +546,11 @@ export default {
           });
         }
         
-        // Get system prompt
-        const systemPrompt = await getSystemPrompt(request.url, env);
-        
-        // Get crawl links
-        const crawlLinks = await getCrawlLinks(request.url, env);
+        // Load system prompt and crawl links in parallel for better performance
+        const [systemPrompt, crawlLinks] = await Promise.all([
+          getSystemPrompt(request.url, env),
+          getCrawlLinks(request.url, env)
+        ]);
         
         // Enhanced system prompt with crawl links if available
         let enhancedPrompt = systemPrompt;
@@ -509,52 +582,41 @@ export default {
         });
       }
       
-      // Add: Handle welcome message API
+      // Handle welcome message API
       if (url.pathname === '/api/welcome-message' && request.method === 'GET') {
-        // Load systemInstruction.txt to get the base persona
-        const baseSystemPrompt = await getSystemPrompt(request.url, env);
         // Get requested language from query param, fallback to 'en'
         const langCode = url.searchParams.get('lang') || 'en';
+        
+        // Check cache first for welcome messages (they rarely change)
+        const welcomeCacheKey = `welcome:${langCode}`;
+        if (memoryCache.has(welcomeCacheKey)) {
+          return new Response(JSON.stringify({ 
+            welcome: memoryCache.get(welcomeCacheKey) 
+          }), {
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'max-age=86400', // Cache for a day
+              ...corsHeaders
+            }
+          });
+        }
+        
+        // Load systemInstruction.txt to get the base persona
+        const baseSystemPrompt = await getSystemPrompt(request.url, env);
+        
         // Map language codes to full names
         const langMap = {
-          en: 'English',
-          id: 'Bahasa Indonesia',
-          ms: 'Bahasa Melayu',
-          jv: 'Javanese',
-          su: 'Sundanese',
-          fr: 'French',
-          de: 'German',
-          es: 'Spanish',
-          it: 'Italian',
-          pt: 'Portuguese',
-          ru: 'Russian',
-          zh: 'Chinese',
-          ja: 'Japanese',
-          ko: 'Korean',
-          ar: 'Arabic',
-          hi: 'Hindi',
-          th: 'Thai',
-          vi: 'Vietnamese',
-          nl: 'Dutch',
-          tr: 'Turkish',
-          pl: 'Polish',
-          sv: 'Swedish',
-          fi: 'Finnish',
-          da: 'Danish',
-          no: 'Norwegian',
-          ro: 'Romanian',
-          hu: 'Hungarian',
-          cs: 'Czech',
-          el: 'Greek',
-          he: 'Hebrew',
-          uk: 'Ukrainian',
-          fa: 'Persian',
-          ur: 'Urdu',
-          // Add more as needed
+          en: 'English', id: 'Bahasa Indonesia', ms: 'Bahasa Melayu',
+          jv: 'Javanese', su: 'Sundanese', fr: 'French',
+          de: 'German', es: 'Spanish', it: 'Italian',
+          pt: 'Portuguese', ru: 'Russian', zh: 'Chinese',
+          ja: 'Japanese', ko: 'Korean', ar: 'Arabic',
+          hi: 'Hindi', th: 'Thai', vi: 'Vietnamese',
+          // ... other languages
         };
         const langName = langMap[langCode] || langCode;
-        // Compose prompt for AI, ensuring it knows its name is FREA
-        // The baseSystemPrompt already contains the FREA persona definition.
+        
+        // Compose prompt for AI
         const aiPromptForWelcome = `You are FREA, an AI assistant. Generate a short, friendly welcome message for a chat widget, introducing yourself as FREA. The message should be in ${langName}. Only output the message, no explanations or extra text. Use the persona defined in the system instructions.`;
         
         let welcome = '';
@@ -568,6 +630,8 @@ export default {
               ],
               max_tokens: 100
             });
+            
+            // Extract welcome message from response
             if (typeof aiResp === 'string') {
               welcome = aiResp.trim();
             } else if (aiResp && typeof aiResp.response === 'string') {
@@ -582,13 +646,21 @@ export default {
           console.error('Error generating AI welcome message:', e);
           // ignore, fallback below
         }
+        
         if (!welcome) {
           // Fallback messages updated to use FREA
-          welcome = langCode === 'id' ? 'Halo! Saya FREA, asisten AI Anda. Ada yang bisa saya bantu?' : 'Hi! I am FREA, your AI assistant. How can I help you?';
+          welcome = langCode === 'id' ? 
+            'Halo! Saya FREA, asisten AI Anda. Ada yang bisa saya bantu?' : 
+            'Hi! I am FREA, your AI assistant. How can I help you?';
         }
+        
+        // Cache the welcome message
+        memoryCache.set(welcomeCacheKey, welcome);
+        
         return new Response(JSON.stringify({ welcome }), {
           headers: {
             'Content-Type': 'application/json',
+            'Cache-Control': 'max-age=86400', // Cache for a day
             ...corsHeaders
           }
         });
@@ -614,12 +686,13 @@ export default {
       return new Response(generateInstructionsHTML(url.origin), {
         headers: { 
           'Content-Type': 'text/html',
+          'Cache-Control': 'max-age=3600', // Cache for an hour
           ...corsHeaders
         }
       });
     } catch (error) {
       console.error('Error:', error);
-      return new Response(JSON.stringify({ error: 'An error occurred' }), {
+      return new Response(JSON.stringify({ error: 'An error occurred', message: error.message }), {
         status: 500,
         headers: { 
           'Content-Type': 'application/json',
@@ -632,114 +705,110 @@ export default {
 
 // Generic function to fetch text files with multiple fallback options
 async function fetchTextFile(fileName, baseUrl, env, defaultContent = '') {
-  console.log(`Attempting to fetch ${fileName} from baseUrl: ${baseUrl}`);
+  // Create a cache key for the file
+  const cacheKey = `file:${fileName}:${baseUrl}`;
   
+  // Check memory cache first for the fastest response
+  if (memoryCache.has(cacheKey)) {
+    console.log(`Found ${fileName} in memory cache`);
+    return memoryCache.get(cacheKey);
+  }
+  
+  let content = null;
+  
+  // Method 1: For systemInstruction.txt, check SYSTEM_PROMPT KV first (most likely location)
+  if (fileName === 'systemInstruction.txt' && env?.SYSTEM_PROMPT) {
+    try {
+      content = await env.SYSTEM_PROMPT.get('systemInstruction.txt');
+      if (content) {
+        console.log(`Loaded ${fileName} from SYSTEM_PROMPT KV`);
+        memoryCache.set(cacheKey, content);
+        return content;
+      }
+    } catch (e) {
+      console.log(`Error accessing ${fileName} from KV:`, e);
+    }
+  }
+  
+  // Method 2: Try direct fetch from same origin (most efficient network path)
   try {
-    // Method 1: Direct fetch from same origin
-    try {
-      const directUrl = `${baseUrl}/${fileName}`;
-      console.log(`Trying direct fetch from: ${directUrl}`);
-      const response = await fetch(directUrl);
-      console.log(`Direct fetch response status: ${response.status}`);
-      
-      if (response.ok) {
-        const content = await response.text();
-        console.log(`Successfully loaded ${fileName} via direct fetch (${content.length} chars)`);
+    const directUrl = `${baseUrl}/${fileName}`;
+    const response = await fetch(directUrl, { 
+      headers: { 'Accept': 'text/plain' },
+      cf: { cacheTtl: 3600 } // Use Cloudflare's cache when possible
+    });
+    
+    if (response.ok) {
+      content = await response.text();
+      if (content) {
+        console.log(`Loaded ${fileName} via direct fetch`);
+        memoryCache.set(cacheKey, content);
         return content;
-      } else {
-        console.log(`Direct fetch failed for ${fileName}: ${response.status}`);
       }
-    } catch (e) {
-      console.log(`Error in direct fetch for ${fileName}:`, e);
     }
-    
-    // Method 2: Using R2/ASSETS binding if available
-    if (env && env.ASSETS) {
-      try {
-        console.log(`Trying to fetch ${fileName} from ASSETS binding`);
-        const asset = await env.ASSETS.get(fileName);
-        if (asset) {
-          const content = await asset.text();
-          console.log(`Successfully loaded ${fileName} from ASSETS (${content.length} chars)`);
-          return content;
-        } else {
-          console.log(`File ${fileName} not found in ASSETS`);
-        }
-      } catch (e) {
-        console.log(`Error accessing ${fileName} from ASSETS:`, e);
-      }
-    } else {
-      console.log('ASSETS binding not available');
-    }
-    
-    // Method 3: Try from KV storage if available (specifically for systemInstruction.txt via SYSTEM_PROMPT)
-    if (fileName === 'systemInstruction.txt') {
-      if (env && env.SYSTEM_PROMPT) {
-      try {
-          console.log(`Trying to fetch ${fileName} from SYSTEM_PROMPT KV binding`);
-          // The key in this KV is 'systemInstruction.txt' as per deploy.sh
-          const content = await env.SYSTEM_PROMPT.get('systemInstruction.txt'); 
+  } catch (e) {
+    // Silent fail, try next method
+  }
+  
+  // Method 3: Try using R2/ASSETS binding if available
+  if (env?.ASSETS) {
+    try {
+      const asset = await env.ASSETS.get(fileName);
+      if (asset) {
+        content = await asset.text();
         if (content) {
-            console.log(`Successfully loaded ${fileName} from SYSTEM_PROMPT KV (${content.length} chars)`);
+          console.log(`Loaded ${fileName} from ASSETS binding`);
+          memoryCache.set(cacheKey, content);
           return content;
-        } else {
-            console.log(`File ${fileName} not found in SYSTEM_PROMPT KV`);
-          }
-        } catch (e) {
-          console.log(`Error accessing ${fileName} from SYSTEM_PROMPT KV:`, e);
         }
-      } else {
-        console.log('SYSTEM_PROMPT KV binding not available for systemInstruction.txt');
-      }
-    }
-    // For other files (e.g. crawl.txt), KV fetch is skipped here if no other generic KV logic exists.
-    // They will fall through to subsequent methods if not found by earlier ones.
-    
-    // Method 4: Try absolute URL with appropriate headers
-    try {
-      // Try a fetch with proper headers for text retrieval
-      const absoluteUrl = new URL(fileName, baseUrl).toString();
-      console.log(`Trying CORS fetch from: ${absoluteUrl}`);
-      const response = await fetch(absoluteUrl, { 
-        headers: { 
-          'Accept': 'text/plain',
-          'X-Requested-With': 'XMLHttpRequest'
-        }
-      });
-      
-      console.log(`CORS fetch response status: ${response.status}`);
-      if (response.ok) {
-        const content = await response.text();
-        console.log(`Successfully loaded ${fileName} via CORS (${content.length} chars)`);
-        return content;
       }
     } catch (e) {
-      console.log(`Error in CORS fetch for ${fileName}:`, e);
+      // Silent fail, try next method
     }
+  }
+  
+  // Method 4: Try absolute URL with CORS headers as last resort
+  try {
+    const absoluteUrl = new URL(fileName, baseUrl).toString();
+    const response = await fetch(absoluteUrl, { 
+      headers: { 'Accept': 'text/plain', 'X-Requested-With': 'XMLHttpRequest' }
+    });
     
-    // Method 5: Try with embedded content as a fallback
-    if (fileName === 'systemInstruction.txt') {
-      console.log('Using embedded systemInstruction.txt content');
-      return `You are FREA, an assistant based on Azzar persona, a helpful AI assistant who specializes in web development, microcontrollers, and IoT technology. You\'re created by a freelance engineer from Yogyakarta, Indonesia. You\'re friendly, knowledgeable, and always willing to help with technical questions.`;
-    } else if (fileName === 'crawl.txt') {
-      console.log('Using embedded crawl.txt content');
-      return `https://github.com/1999AZZAR
+    if (response.ok) {
+      content = await response.text();
+      if (content) {
+        console.log(`Loaded ${fileName} via CORS fetch`);
+        memoryCache.set(cacheKey, content);
+        return content;
+      }
+    }
+  } catch (e) {
+    // Silent fail, use fallbacks
+  }
+  
+  // Method 5: Use embedded content as a fallback
+  if (fileName === 'systemInstruction.txt') {
+    console.log('Using embedded systemInstruction.txt content');
+    content = `You are FREA, an assistant based on Azzar persona, a helpful AI assistant who specializes in web development, microcontrollers, and IoT technology. You\'re created by a freelance engineer from Yogyakarta, Indonesia. You\'re friendly, knowledgeable, and always willing to help with technical questions.`;
+  } else if (fileName === 'crawl.txt') {
+    console.log('Using embedded crawl.txt content');
+    content = `https://github.com/1999AZZAR
 https://x.com/siapa_hayosiapa
 https://www.linkedin.com/in/azzar-budiyanto/
 https://medium.com/@azzar_budiyanto
 https://codepen.io/azzar
 https://www.instagram.com/azzar_budiyanto/
 https://azzar.netlify.app/porto`;
-    }
-    
-    // Fall back to default content
-    console.log(`All fetch methods failed for ${fileName}, using default`);
-    return defaultContent;
-    
-  } catch (error) {
-    console.error(`Unexpected error fetching ${fileName}:`, error);
-    return defaultContent;
+  } else {
+    content = defaultContent;
   }
+  
+  // Cache even the fallback content to avoid repeated lookups
+  if (content) {
+    memoryCache.set(cacheKey, content);
+  }
+  
+  return content || defaultContent;
 }
 
 // Function to get system prompt from systemInstruction.txt
