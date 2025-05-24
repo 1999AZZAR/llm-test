@@ -119,18 +119,11 @@ export function generateWidgetJS(origin) {
       const style = document.createElement('style');
       style.textContent = \`
         @keyframes azzarPulse {
-          0% {
-            box-shadow: 0 0 0 0 rgba(98, 0, 238, 0.4);
-            transform: scale(1);
-          }
-          70% {
-            box-shadow: 0 0 0 12px rgba(98, 0, 238, 0);
-            transform: scale(1.1);
-          }
-          100% {
-            box-shadow: 0 0 0 0 rgba(98, 0, 238, 0);
-            transform: scale(1);
-          }
+            0% { transform: scale(1) rotate(0deg); box-shadow: 0 0 0 0 rgba(98, 0, 238, 0.4); }
+            25% { transform: scale(1.1) rotate(-5deg); }
+            50% { transform: scale(1.2) rotate(5deg); box-shadow: 0 0 0 12px rgba(98, 0, 238, 0); }
+            75% { transform: scale(1.1) rotate(-2deg); }
+            100% { transform: scale(1) rotate(0deg); box-shadow: 0 0 0 0 rgba(98, 0, 238, 0); }
         }
         
         .azzar-chat-widget {
